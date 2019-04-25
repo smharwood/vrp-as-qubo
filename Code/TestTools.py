@@ -27,10 +27,14 @@ def loadSpins(filename):
             spins = [int(s) for s in lines]
             return spins
         
-        
-def loadIsingMatrix(filename):
+    
+def loadMatrix(filename, comment_char):
     """
-    Load matrix defining the Ising form of problem
+    Load matrix defining problem, EITHER QUBO or Ising
+    
+    comment char is character at beginning of line for comment
+    comment_char = 'c' expected for QUBO
+    comment_char = '#' expected for Ising
     """
     # Store sparsely
     data = []
@@ -38,21 +42,26 @@ def loadIsingMatrix(filename):
     col = []
     constant = 0
     with open(filename) as f:
-        numrowsI = 0
-        numcolsI = 0
+        numrows = 0
+        numcols = 0
         file_lines = f.readlines()
         for line in file_lines:
-            if line[0] == '#':
+            if line[0] == comment_char:
                 # comment line. Get constant of objective if possible;
                 # if the line contains an equal sign the constant is after it
                 split_contents = line.split('=')
                 if len(split_contents)>1:
                     constant = float(split_contents[1])
+            elif line[0] == 'p':
+                # 'Sentinel' line (specific to Dwave input- indicates QUBO)
+                # p qubo 0 maxDiagonals nDiagonals nElements
+                contents = line.split()
+                matLength = int(contents[4]) + int(contents[5])
             else:
                 # "split()" splits based on arbitrary whitespace
                 contents = line.split()
                 if len(contents) == 2:
-                    # sizing
+                    # sizing for ISING form
                     # numvars numelements
                     matLength = int(contents[1])
                 else:
@@ -60,17 +69,24 @@ def loadIsingMatrix(filename):
                     row.append(int(contents[0]))
                     col.append(int(contents[1]))
                     data.append(float(contents[2]))        
-                    numrowsI = max(numrowsI,max(row))
-                    numcolsI = max(numcolsI,max(col))
+                    numrows = max(numrows,max(row))
+                    numcols = max(numcols,max(col))
     # end with
 
     # A few sanity checks
-    assert (len(row) == matLength), "Ising matrix length discrepancy"
-    assert (numrowsI == numcolsI), "Ising matrix not square"
+    assert (len(row) == matLength), "Input matrix length discrepancy"
+    assert (numrows == numcols), "Input matrix not square"
 
-    sparseIsingMatrix = scipy.sparse.coo_matrix((data,(row, col)))
+    sparseMatrix = scipy.sparse.coo_matrix((data,(row, col)))
+    return sparseMatrix, constant
+
     
-    return sparseIsingMatrix, constant
+# Helpers to help catch wrong inputs
+def loadQUBOMatrix(filename):
+    return loadMatrix(filename, 'c')
+
+def loadIsingMatrix(filename):
+    return loadMatrix(filename, '#')
 
 
 def evaluateIsingObjective(matrix, constant, spins):
@@ -95,13 +111,14 @@ def evaluateIsingObjective(matrix, constant, spins):
     return objective
 
 
-def exhaustiveSearch(matrix, constant, stopAtFeas=False):
+def exhaustiveSearch(matrix, constant, stopAtFeasible=False):
     """
     Go thru all possible spins to find min
     """
     numSpins = matrix.shape[0]
     
     bestObj = np.inf
+    bestSpins = []
     progCount = 0
     progSpacing = (2**numSpins)/10000.0
     for v in range(2**numSpins):
@@ -111,17 +128,20 @@ def exhaustiveSearch(matrix, constant, stopAtFeas=False):
         
         if v > progCount*progSpacing:
             progCount = int(np.floor(v/progSpacing)+1)
-            print(progCount/100.0, "% configurations evaluated.", end = '\r')
+            print('\rConfigurations evaluated: {}%'.format(progCount/100.0), end='')
             
         obj = evaluateIsingObjective(matrix, constant, spins)
         if obj < bestObj:
             bestObj = obj
-            bestSpin = spins
+            bestSpins = [spins]
+        elif obj == bestObj:
+            # if we have a tie, append the spins
+            bestSpins.append(spins)
             
-        if stopAtFeas and bestObj == 0:
+        if stopAtFeasible and bestObj == 0:
             break
         
-    return bestObj, bestSpin
+    return bestObj, bestSpins
     
 
 def visualizeIsingMatrixSparsity(matrix):
@@ -132,13 +152,45 @@ def visualizeIsingMatrixSparsity(matrix):
     plt.spy(DenseMatrix)
     plt.show()
     
+    
+def compareQuboAndIsing(exName):
+    """
+    Given a root example name exName, load the data in
+    exName.qubo and exName.rudy
+    and compare the objective functions on equivalent spins
+    to make sure that the conversion from QUBO to Ising is corect
+    """
+    QM, QC = loadQUBOMatrix(exName+'.qubo1')
+    IM, IC = loadIsingMatrix(exName+'.rudy1')
+    
+    # we at least expect the size of the matrices to be the same
+    assert (QM.shape[0] == QM.shape[1]), "QUBO matrix not square"
+    assert (IM.shape[0] == IM.shape[1]), "Ising matrix not square"
+    assert (QM.shape == IM.shape), "QUBO and Ising matrices different sizes"
+    
+    numTest = 100   # number of tests to perform
+    N = QM.shape[0] # number of variables
+    
+    for k in range(numTest):
+        # random binary variables and corresponding "spins"
+        randomX = np.random.randint(0,2,N)
+        randomS = 2*randomX - 1
+        # calculate QUBO objective
+        objectiveQ = QC + QM.dot(randomX).dot(randomX)
+        # calculate Ising objective
+        objectiveI = evaluateIsingObjective(IM, IC, randomS)
+        assert objectiveQ == objectiveI, "Test FAILED"
+        
+    print('Test passed!')
+    
 
 if __name__ == "__main__":
     
-    assert len(sys.argv) >= 2, "Need at least a matrix filename"
+    args = sys.argv[1:]
+    assert len(args) >= 1, "Need at least a matrix filename"
         
     # If we accidentally put the file names in quotes strip those out
-    matrix_filename = sys.argv[1].strip('\'\"')
+    matrix_filename = args[0].strip('\'\"')
     print("\nUsing matrix from "+matrix_filename)
     assert (os.path.isfile(matrix_filename)), "Matrix file "+matrix_filename+" not found"
 
@@ -146,13 +198,13 @@ if __name__ == "__main__":
     print("Matrix sparsity:")
     visualizeIsingMatrixSparsity(matrix)
     
-    if len(sys.argv) == 2:
+    if len(args) == 1:
         print("\nPerforming exhaustive search for minimum")
         bestObj, bestSpin = exhaustiveSearch(matrix,constant)
         print("\nBest objective = {} at {}".format(bestObj, bestSpin))
     else :
         # If we accidentally put the file names in quotes strip those out
-        spins_filename = sys.argv[2].strip('\'\"')
+        spins_filename = args[1].strip('\'\"')
         print("\nEvaluating spins from "+spins_filename)
         assert (os.path.isfile(spins_filename)), "Spins file "+spins_filename+" not found"
     
@@ -161,3 +213,4 @@ if __name__ == "__main__":
         
         obj = evaluateIsingObjective(matrix, constant, spins)
         print("\nObjective is {}".format(obj))
+
