@@ -229,8 +229,9 @@ prob.exportMPS(mps_name)
 
 #%%
 
-#prob.exportQUBO('ExMIRPg2.qubo')
-#prob.exportIsing('ExMIRPg2.rudy')
+#baseName = 'ExMIRPg2-TH{}'.format(TimeHorizon)
+#prob.exportQUBO(baseName+'.qubo')
+#prob.exportIsing(baseName+'.rudy')
 
 
 #%%
