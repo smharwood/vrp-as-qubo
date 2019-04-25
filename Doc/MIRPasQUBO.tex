@@ -1,0 +1,542 @@
+\documentclass[11pt]{article}
+
+\usepackage{amsmath,amssymb,xfrac}
+\usepackage{amsthm}
+\usepackage{algorithm,algorithmic}
+\usepackage[margin=1in]{geometry}
+\usepackage{url}
+
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}{Lemma}
+\newtheorem{proposition}{Proposition}
+\newtheorem{corollary}{Corollary}
+\newtheorem{assumption}{Assumption}
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}
+
+\newcommand{\mbf}{\mathbf}
+\newcommand{\mbb}{\mathbb}
+\newcommand{\mbs}{\boldsymbol}
+\newcommand{\st}{\mathrm{s.t.}\;}
+\newcommand{\tr}{^{\mathrm{T}}}
+\newcommand{\abs}[1]{\left| #1 \right|}
+\newcommand{\norm}[1]{\left\| #1 \right\|}
+\newcommand{\set}[1]{\left\{ #1 \right\}}
+\newcommand{\card}[1]{\left| #1 \right|}
+\newcommand{\grad}{\nabla}
+\newcommand{\smallsum}{{\textstyle{\sum}}}
+\newcommand{\symgt}{\succ}
+\newcommand{\symge}{\succeq}
+
+\newcommand{\0}{\mathbf{0}}
+\renewcommand{\a}{\mathbf{a}}
+\renewcommand{\b}{\mathbf{b}}
+%\renewcommand{\c}{\mathbf{c}}
+\renewcommand{\d}{\mathbf{d}}
+\newcommand{\g}{\mathbf{g}}
+\newcommand{\q}{\mathbf{q}}
+\renewcommand{\r}{\mathbf{r}}
+\newcommand{\s}{\mathbf{s}}
+\renewcommand{\u}{\mathbf{u}}
+\renewcommand{\v}{\mathbf{v}}
+\newcommand{\x}{\mathbf{x}}
+\newcommand{\y}{\mathbf{y}}
+\newcommand{\z}{\mathbf{z}}
+\newcommand{\bgam}{\boldsymbol{\gamma}}
+\newcommand{\blam}{\boldsymbol{\lambda}}
+\newcommand{\bmu}{\boldsymbol{\mu}}
+\newcommand{\bnu}{\boldsymbol{\nu}}
+\newcommand{\btheta}{\boldsymbol{\theta}}
+\renewcommand{\hat}{\widehat}
+\renewcommand{\tilde}{\widetilde}
+
+\title{Maritime inventory routing problem as a quadratic unconstrained binary optimization problem}
+\author{Stuart M. Harwood \and Dimitar Trenev \and Dimitri Papageorgiou \and Laurent White}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+This document describes a way to transform a maritime inventory routing problem (MIRP) into a related problem in the form of a quadratic unconstrained binary optimization problem (QUBO).
+The motivation is that emerging hardware such as physical (quantum) annealers could then be used to obtain useful solutions.
+
+\section{Introduction}
+Inventory routing problems are a class of optimization problems often encountered in logistics and operations research.
+They entail the simultaneous decision of the routing of various delivery vehicles and management of inventory, with the goal of optimizing some objective (e.g. minimizing transportation cost).
+MIRPs are a subclass characterized by long travel times and large delivery amounts.
+MIRPs can be used to optimize global supply chains of commodity products.
+Because of the maritime aspect of the problem, we will use the terms ``ships'' to mean the vehicles, and ``ports'' to mean either the supply or demand nodes.
+
+A general framework and library of instances, termed MIRPLib, was published in \cite{mirplib}.
+We will use this open test set as inspiration for the form of problem that we will transform.
+The assumptions behind the core model of MIRPLib are very broad and afford the flexibility to model an inhomogeneous fleet (e.g., ships of different sizes and traveling speeds), split deliveries (i.e. not emptying out the ship on delivery), or multiple ships servicing a port at the same time.
+However, we will simplify some of these assumptions to obtain the QUBO formulation.
+
+To this end, we aim to use the general vehicle routing problem with time windows (VRPTW) formulation from \cite{desrochersEA92}.
+The main reason for this is that the core problem in \cite{desrochersEA92} is explicitly given as a form of set partitioning problem. 
+This is a classic problem in discrete optimization, for which a mapping to a QUBO is easily obtained;
+see for instance \cite[\S4.1]{lucas14}. %termed exact covering
+
+In the following sections, we will discuss the specific form of the VRPTW, the transformation to a QUBO,  and finally the modifications needed to obtain a reasonable approximation of a MIRPLib problem as a VRPTW.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{VRPTW as set partitioning problem}
+
+The setting of the VRPTW is on a graph with nodes $N \cup \set{d}$ and directed arcs $A$.
+One node $d$ is a special ``depot'' node that is treated differently;
+otherwise, all other nodes $i$ are customers associated with which are an amount of product demanded $q_i$ which must be delivered in a time window $[a_i,b_i]$.
+We allow a vehicle to arrive early and wait, but it cannot arrive late (i.e. after $b_i$).
+Each customer is serviced exactly once (i.e. a vehicle cannot fulfill part of the demand, and another one fulfill the rest).
+Each arc $(i,j) \in A$ has an associated cost $c_{i,j}$ and travel time $t_{i,j}$.
+A homogeneous fleet of vehicles is available.
+Each vehicle has capacity (maximum load size) $Q$.
+An interesting feature of this formulation is that the number of vehicles available is not explicitly constrained; 
+thus it also combines elements of a fleet-sizing problem.
+However, through careful construction of the graph, a maximum number of vehicles may be enforced (at the risk of posing an infeasible problem).
+
+The decisions of the VRPTW are routes.
+A route is a sequence of nodes $(i_0, i_1, \dots , i_K, i_{K+1})$ satisfying the following constraints.
+A route begins and ends at the depot: $i_0 = i_{K+1} = d$.
+Each segment is a valid arc: $(i_k,i_{k+1}) \in A$, for all $0 \le k \le K$.
+The sum of the demands at the visited nodes must be less than vehicle capacity: $\smallsum_{j=1}^{k} q_{i_j} \le Q$, for all $k \le K$.
+The arrival time at node $i_k$ must be before the time window ends.
+If we let $T_{i_0} = 0$, then the effective arrival time at node $i_{k+1}$ is given by
+$T_{i_{k+1}} = \max\set{a_{i_{k+1}}, T_{i_k} + t_{i_k,i_{k+1}} }$ for all $0 \le k \le K$.
+Then we require $T_{i_k} \le b_{i_k}$ for all $k$.
+
+We index the set of routes by the set $R$.
+If route $r \in R$ has node sequence $(i_0, i_1, \dots , i_K, i_{K+1})$, then it has cost $c_r = \smallsum_{k=0}^{K} c_{i_k,i_{k+1}}$.
+Finally, define $\delta_{i,r}$ to be a constant with value $1$ if route $r$ visits customer $i \in N$
+(i.e., one of the nodes in the sequence defining the route is $i$), 
+and zero otherwise.
+
+The objective of the VRPTW is to minimize the total cost of the planned routes while servicing all customers.
+Associate a variable $x_r$ which has value $1$ if route $r$ is chosen, and zero otherwise, and denote the entire vector of $x_r$ values as $x$.
+Then we can write the problem as
+\begin{align}
+\label{vrptw}
+\min_x\; & \sum_{r \in R} c_r x_r \\
+\st
+\notag & \sum_{r \in R} \delta_{i,r} x_r = 1, \forall i \in N, \\
+\notag & x_r \in \set{0,1}, \forall r \in R.
+\end{align}
+%
+The equality constraint enforces the requirement that all customer nodes are visited by exactly one route.
+This is precisely the set partitioning/exact covering problem, where we are trying to ``cover'' the customer nodes with routes, and math program~\eqref{vrptw} is precisely how one would formulate the problem as a integer linear program (with the added objective of minimizing weight/cost).
+
+\subsection*{Challenges and classical computing methods}
+
+Let $n = \card{R}$, the cardinality of $R$.
+Even with all the requirements we make on a route (e.g. sum of demands must be less than vehicle capacity, etc.), $n$ may be huge (the number of paths of length $m$ on a fully connected graph with $m$ nodes is $m!$).
+We will not consider this source of difficulty in much detail;
+we will consider $R$ to be given and index all routes of interest, and view \eqref{vrptw} as an ``exact'' problem for which an optimal or near-optimal solution is our ultimate goal.
+This provides sufficient challenge as described next.
+
+We have $n$ variables in problem \eqref{vrptw} ($x \in \set{0,1}^n$), and thus $2^n$ possible solutions or values that $x$ may take.
+This ``exponential scaling'' is a simple way to see the challenges faced by classical algorithms like branch and bound, implemented by commercial software like CPLEX.
+To get a sense of what this means in practice, consider the study in \cite{zaghroutiEA14}.
+The numerical experiments include the performance of CPLEX (version 12.0, on a single 2.8 GHz dual core processor) on a collection of set partitioning problems coming from an airline crew scheduling problem.
+For their ``small'' instances (approximately 800 constraints or nodes and 8,000 variables or routes), CPLEX required less than 30 seconds to solve any instance 
+(presumably, to some tolerance;
+CPLEX's default relative gap tolerance is $0.01\%$ \cite{cplex}).
+However, the ``medium'' sized instances in \cite{zaghroutiEA14} have approximately 1,200 constraints or nodes and 130,000 variables or routes.
+The authors report that CPLEX could not find any feasible solution in 10 hours of run time.
+While these results are problem specific and already a little out of date, they provide a useful reference point.
+
+
+\section{VRPTW as QUBO}
+We discuss how to put \eqref{vrptw} into a standard form of a QUBO.
+There are various conventions and forms that may be followed;
+an alternative form is the Ising model form that we will discuss later.
+For the moment, a QUBO is a mathematical optimization problem of the form
+\begin{align}
+\label{qubo}
+\min_x\; & x \tr M x\\
+\st
+\notag & x \in \set{0,1}^n,
+\end{align}
+where $M$ is a $n \times n$ real matrix.
+A common assumption is that $M$ is upper triangular.
+Further, when $x \in \set{0,1}$, we have $x^2 = x$, and so a common formulation of \eqref{qubo} becomes
+\begin{align}
+\label{qubo_ut}
+\min_x\; & \sum_i M_{i,i} x_i + \sum_{i<j} M_{i,j} x_i x_j \\
+\st
+\notag & x \in \set{0,1}^n,
+\end{align}
+where the $(i,j)^{th}$ element of $M$ is $M_{i,j}$.
+%(This format is reflected in the input file format to D-Wave's \verb|qbsolv| solver for QUBOs \cite{boothEA_dwave}.)
+
+The challenge is to construct a matrix $M$ so that \eqref{qubo_ut} is equivalent to \eqref{vrptw}.
+This is conceptually easy;
+we would like our matrix to encode the quadratic penalty (or energy) function
+\[
+ H : x \mapsto B \sum_r c_r x_r + A \sum_{i \in N} (1 - \smallsum_r \delta_{i,r} x_r)^2
+\]
+for (to be determined) real constants $A$, $B$.
+This transformation is consistent with the general suggestion for binary integer linear programs from \cite[\S3]{lucas14}, as well as the transformation specific to the set partitioning problem from \cite[\S4.1]{lucas14}.
+It is easily explained as an exact penalty reformulation of \eqref{vrptw} as well.
+
+The main challenge is finding the right values of $A$ and $B$ so that  
+minimization of $H$ is equivalent to \eqref{vrptw}.
+This is established in the following result.
+
+\begin{proposition}
+\label{prop:penalty}
+Assume $A > 0$, $B > 0$ satisfy
+\[
+	\frac{A}{B} > \sum_r \abs{c_r}.
+\]
+%\[
+%	\frac{A}{B} > n \max_r \abs{c_r},
+%\]
+Then 
+$x^*$ is a solution of $\min\set{ H(x) : x \in \set{0,1}^n }$
+and problem~\eqref{vrptw} is feasible
+if and only if
+$x^*$ solves problem~\eqref{vrptw}
+(where $n = \card{R}$).
+\end{proposition}
+%
+\begin{proof}
+If $x^*$ solves \eqref{vrptw}, then it is feasible, so the penalty term is zero:
+$\sum_i (1 - \smallsum_r \delta_{i,r} x_r^*)^2 = 0$.
+%and $H(x^{*}) = B \sum_r c_r x_r^{*}$.
+Assume for a contradiction that there is an $x^{\dagger} \in \set{0,1}^n$ with $H(x^{\dagger}) < H(x^*)$, or
+\begin{equation}
+\label{to_contradict}
+B \sum_r c_r x_r^{\dagger} + A \sum_i (1 - \smallsum_r \delta_{i,r} x_r^{\dagger})^2 
+<
+B \sum_r c_r x_r^*.
+\end{equation}
+If $x^{\dagger}$ is feasible in \eqref{vrptw}, then the penalty term is zero, and so 
+$\sum_r c_r x_r^{\dagger} < \sum_r c_r x_r^{*}$ which contradicts the optimality of $x^*$;
+thus, we must have that $x^{\dagger}$ is infeasible in \eqref{vrptw}.
+Since $x^{\dagger}_r$ and  $\delta_{i,r}$ are $\set{0,1}$-valued for all $r$ and $i$, the smallest value that 
+$A \sum_i (1 - \smallsum_r \delta_{i,r} x_r^{\dagger})^2$ 
+can take is $A$
+(since it is infeasible, it cannot be zero).
+Meanwhile, by the (generalization of) the Cauchy-Schwarz inequality,
+$-B \sum_r c_r (x_r^{\dagger} - x_r^*) \le B \norm{c}_* \norm{x^{\dagger} - x^*}$
+for any norm $\norm{\cdot}$ and its dual norm $\norm{\cdot}_*$.
+In particular, using the infinity-norm, we have
+$-B \sum_r c_r (x_r^{\dagger} - x_r^*) \le B \norm{c}_1 \cdot 1$.
+Using 
+$A \le A \sum_i (1 - \smallsum_r \delta_{i,r} x_r^{\dagger})^2$
+and
+$- B \norm{c}_1 \le B \sum_r c_r (x_r^{\dagger} - x_r^*)$
+and plugging into \eqref{to_contradict},
+we have 
+\[
+-B \norm{c}_1 + A < 0,
+\]
+but upon rearranging and using the definition of the one-norm, we see this contradicts the assumption that
+$\frac{A}{B} > \sum_r \abs{c_r}$.
+Thus $x^* \in \arg \min_x H(x)$.
+
+Conversely, assume that $x^{\dagger}$ solves $\min_x H(x)$, and that problem~\eqref{vrptw} is feasible.
+First, note that we can scale the objective of \eqref{vrptw} by $B> 0$ and not change the optimal solution set.
+We have $\min_x H(x)$ must be less than or equal to the minimum objective value of \eqref{vrptw};
+$H(x)$ equals the objective of \eqref{vrptw} on the feasible set of \eqref{vrptw}, and the minimization of $H$ is over a superset of the feasible set of \eqref{vrptw}, so the minimum must be less.
+Thus, we just need to establish that $x^{\dagger}$ is feasible for \eqref{vrptw}.
+So, assume for a contradiction that $x^{\dagger}$ is not feasible.
+By assumption, there exists $x^*$ feasible in \eqref{vrptw}.
+Since $x^{\dagger}$ minimizes $H$, we have
+\begin{equation}
+\notag
+B \sum_r c_r x_r^{\dagger} + A \sum_i (1 - \smallsum_r \delta_{i,r} x_r^{\dagger})^2 
+\le
+B \sum_r c_r x_r^*.
+\end{equation}
+We can proceed exactly as before to obtain
+$
+-B \norm{c}_1 + A \le 0,
+$
+which still contradicts the assumption that
+$\frac{A}{B} > \sum_r \abs{c_r}$.
+Therefore $x^{\dagger}$ is feasible in \eqref{vrptw}, and thus optimal.
+\end{proof}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection*{Constructing $M$}
+
+Let $B = 1$ and $A = \smallsum_r \abs{c_r} + 1$.
+The penalty function $H$ is 
+\begin{align*}
+	B\sum_r c_r x_r + 
+	A \sum_{i \in N} (1 - \smallsum_r \delta_{i,r} x_r)^2 
+&= 	B\sum_r c_r x_r + 
+  	A \sum_i \left( 1 - \smallsum_r 2\delta_{i,r} x_r + (\smallsum_r \delta_{i,r} x_r)^2 \right) \\
+&= 	B\sum_r c_r x_r + 
+	A \sum_i \left( 1 - \smallsum_r 2\delta_{i,r} x_r + \smallsum_{r,r'} \delta_{i,r} \delta_{i,r'} x_r x_{r'} \right) \\
+&=  B\sum_r c_r x_r + 
+	A\card{N} - A\smallsum_r x_r \smallsum_i 2\delta_{i,r} + A\smallsum_{r,r'} x_r x_{r'} \smallsum_i \delta_{i,r} \delta_{i,r'}.
+\end{align*}
+Assume, for simplicity, that $R = \set{1,\dots, n}$.
+Then the diagonal of $M$ is
+\begin{align*}
+	M_{r,r} 	&= Bc_r - 2A\smallsum_{i \in N} \delta_{i,r} + A\smallsum_{i \in N} \delta_{i,r}^2 \\
+				&= Bc_r -  A\smallsum_{i \in N} \delta_{i,r}
+\end{align*}
+where the term $A\smallsum_i \delta_{i,r}^2$ accounts for quadratic terms, and the simplification is possible since $\delta_{i,r}$ is $\set{0,1}$-valued and so $\delta_{i,r}^2 = \delta_{i,r}$.
+The upper triangular part is
+\[
+	M_{r,r'} = 2A\smallsum_{i \in N} \delta_{i,r} \delta_{i,r'}, \quad r < r',
+\]
+where the factor of two accounts for symmetry 
+(i.e., the terms that would have been in the lower triangle).
+By assumption, $M_{r,r'} = 0$, for $r > r'$.
+The constant $A\card{N}$ must be accounted for so that the optimal objective values of \eqref{qubo_ut} and \eqref{vrptw} agree.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection*{Ising model form}
+
+To get the Ising model formulation of the problem, we introduce the $\set{-1,+1}$-valued variables
+$s_r = 2 x_r - 1$.
+Consequently, 
+$x_r = \sfrac{1}{2}(s_r + 1)$.
+Using this change of variables for the general expression $x\tr M x$, we get
+\begin{align*}
+\sum_{i,j} M_{i,j} x_i x_j
+	&= \sum_{i,j} (\sfrac{1}{4}) M_{i,j}(s_i s_j + s_i + s_j + 1) \\
+	&=  d 
+		+ \sum_i \sfrac{1}{4} \smallsum_{j} ( M_{i,j} + M_{j,i} ) s_i
+		+ \sum_{i \neq j} (\sfrac{1}{4}) M_{i,j} s_i s_j
+\end{align*}
+with the constant $d = \sfrac{1}{4}\left(\sum_i M_{i,i} +  \sum_{i, j} M_{i,j} \right)$, which also accounts for the quadratic terms since $s_i^2 = 1$ for $s_i \in \set{-1,+1}$.
+
+Using the data for the vehicle routing problem, 
+define $J_{r,r'}$ for $r < r'$ by
+\[
+	J_{r,r'} = \frac{M_{r,r'}}{4} = \frac{A}{2} \smallsum_{i \in N} \delta_{i,r}  \delta_{i,r'},
+\]
+and note that $J_{r,r'} = M_{r,r'} = 0$ for $r > r'$.
+Define $h_r$ for $r \in R$ by 
+\begin{align*}
+	h_r &= \frac{1}{4} (M_{r,r} + M_{r,r}) + \frac{1}{4}\sum_{r' : r' \neq r} M_{r,r'} + M_{r',r} \\
+		&= \frac{B}{2}c_r -  \frac{A}{2}\sum_{i \in N} \delta_{i,r} 
+			+ \frac{1}{4}\sum_{r' : r' \neq r} 2A\smallsum_{i \in N} \delta_{i,r} \delta_{i,r'}\\
+%		MORE EXPLICITLY:
+%		&= \frac{B}{2}c_r -  \frac{A}{2}\sum_{i \in N} \delta_{i,r} 
+%			+ \frac{1}{4}\sum_{r' : r' > r} 2A\smallsum_{i \in N} \delta_{i,r} \delta_{i,r'}
+%			+ \frac{1}{4}\sum_{r' : r' < r} 2A\smallsum_{i \in N} \delta_{i,r} \delta_{i,r'}\\
+%		&= \frac{B}{2}c_r -  \frac{A}{2}\sum_{i \in N} \delta_{i,r} 
+%			+ \frac{1}{2}A\sum_{i \in N} \delta_{i,r} 
+%				\left(\smallsum_{r': r' > r} \delta_{i,r'} + \smallsum_{r': r' < r} \delta_{i,r'}\right)\\
+		&= \frac{B}{2}c_r - \frac{A}{2}\sum_{i \in N} 
+			\left( \delta_{i,r} - 
+					\delta_{i,r} \left(\smallsum_{r'} \delta_{i,r'} - \delta_{i,r}\right)\right)\\		
+		&= \frac{B}{2}c_r - \frac{A}{2}\sum_{i \in N} \delta_{i,r} \left(2 - \smallsum_{r'} \delta_{i,r'}\right).
+\end{align*}
+The vehicle routing problem can then be written as
+\begin{align}
+\label{ising}
+\min_s\; & \smallsum_r h_r s_r + \smallsum_{r < r'} J_{r,r'} s_r s_{r'} \\
+\st
+\notag & s \in \set{-1,+1}^n,
+\end{align}
+with a constant 
+\[
+d 	= \frac{1}{4}\left(2\smallsum_r M_{r,r} +  \smallsum_{r<r'} M_{r,r'} \right) 
+	= \frac{B}{2} \smallsum_r c_r - \frac{A}{2} \smallsum_r \smallsum_{i \in N} \delta_{i,r}
+		+ \frac{A}{2} \smallsum_{r < r'} \smallsum_{i \in N} \delta_{i,r} \delta_{i,r'}
+\]
+so that the optimal objective value agrees with QUBO~\eqref{qubo_ut}.
+% AGREES WITH ORIGINAL CONSTANT:
+%\[
+%\frac{B}{2}\smallsum_r c_r + A \smallsum_{i \in N} \gamma_i^2 + \frac{A}{4} \smallsum_{i \in N} \smallsum_r \delta_{i,r}
+%\]
+% with $\gamma_i = 1 - \frac{1}{2}\smallsum_r \delta_{i,r}$
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Converting MIRPLib instances to VRPTW}
+
+The core model for MIRPs given in \cite{mirplib} is an arc-flow-based mixed-integer linear program (MILP).
+It is fundamentally a ship (vehicle) routing problem on a time-expanded network of supply and demand ports, which also allows for decisions about the inventory levels on ships, and at supply and demand ports.
+Furthermore, production and consumption rates can also be decided subject to constraints.
+Data required from the MIRP instance/model are summarized in Table~\ref{tab:MIRPdata}.
+We proceed to describe some of the data simplifications we make and constructions required to obtain a problem in the VRPTW form.
+
+\begin{table}
+\caption{Simplified MIRP data used in constructing VRPTW}
+\label{tab:MIRPdata}
+\begin{center}
+\begin{tabular}{r | l}
+\hline
+Data & Meaning/Notes \\
+\hline
+$T$			& Set of time periods, $T = \set{0,1,\dots, n_T}$\\
+$J$ 		& Set of supply/demand ports \\
+$\hat{A}$	& Arcs, subset of $J \times J$ \\
+$\hat{c}_a$	& cost to traverse arc $a$ \\
+$\hat{t}_a$	& time to traverse arc $a$ \\
+$\hat{Q}$	& (Homogeneous) vessel capacity \\
+$R_j$		& Per-unit price for product discharged at port $j$ \\
+$F_j$ 	  	& Amount of product that can be loaded/discharged at port $j$ in a time period\\
+$D_{j,t}$	& Consumption/production in port $j$ in time period $t$\\
+$S_j$		& Capacity/maximum inventory in port $j$ (assume $S_j \ge \hat{Q}$) \\
+$I_j^0$		& Initial inventory at port $j$ \\
+\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{MIRP data simplifications}
+
+\subsubsection*{Homogeneous ships}
+A critical assumption is that of fleet homogeneity;
+specifically, that the speed each ship, the capacity of each ship, the arcs that each ship may traverse, and the cost of traversing each arc are the same.
+This is an assumption of the VRPTW formulation~\eqref{vrptw} that is difficult to relax.
+Consequently, we will focus on and adapt those MIRPLib instances that have homogeneous fleets.
+% LR1_DR02_VC01_V6a
+
+\subsubsection*{Network simplifications}
+The MIRP model is on a time-expanded network;
+a node is a (port,time) pair.
+One side effect is that this allows for, e.g. seasonal dependence on travel times.
+We will simplify this, and assume that there exists a reduction of the network to a ``static'' one, $(J,\hat{A})$, where $J$ is the set of ports, and $\hat{A}$ are the allowed arcs (at any time) between them.
+Similarly, we assume that we can then obtain costs $\hat{c}_a$ and travel time $\hat{t}_a$ for each arc $a$.
+Combined with the assumption of fleet homogeneity, the costs and travel times can be used for all ships in the fleet.
+
+
+\subsubsection*{Fixed and known production/consumption/loading/discharging}
+The core MIRP model allows for the decision of the consumption/production rate in each time period.
+For the purposes of the VRPTW, we will assume that the consumption/production rate $D_{j,t}$ is known and fixed for each time period $t$ and for each port $j$.
+The core MIRP model also allows for decisions about the loading/discharging rate of product onto/off the ships.
+We will similarly assume that the loading and discharging rates $F_j$ are known and fixed for each port $j$.
+
+\subsubsection*{Full load and discharge}
+Another assumption we will make is that ships will load and discharge fully.
+This is not a particularly unrealistic assumption in many maritime vehicle routing problems.
+Furthermore, when combined with fleet homogeneity and fixed consumption rates, it allows us to determine meaningful time windows for each port.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{VRPTW demand levels and vehicle capacity}
+
+The network of the VRPTW (detailed in the following section) will have a collection of nodes associated with each port $j \in J$.
+If port $j$ is a demand port, the corresponding nodes have demand level $\hat{Q}$ (a full discharge from a ship).
+If port $j$ is a \emph{supply} port, the corresponding nodes have demand level $-\hat{Q}$ (a full load onto a ship).
+
+Whereas the VRPTW implicitly treats the depot node $d$ as a supply/source node, we would like the possibility that a valid route allows a ship to visit an alternating sequence of supply and demand ports.
+By treating a supply port as a node with negative demand we can achieve that.
+Since a valid route in the VRPTW must satisfy the condition that the cumulative demand at any node in the route is less than the vehicle capacity, we can enforce the logic that a ship must load product before discharging it by setting the vehicle capacity $Q$ in the VRPTW to zero.
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Determining customer time windows}
+
+Perhaps the main challenge is how to define meaningful time windows for the nodes.
+It is in this procedure that domain knowledge could play a role, and affect how closely the obtained VRPTW approximates the MIRP.
+In what follows, we propose a fairly simple approach.
+
+Consider a demand port $j$, which we decided will have a demand level $\hat{Q}$.
+Its initial inventory is $I_j^0$.
+Its capacity is $S_j$.
+The earliest a ship can arrive is
+the smallest value $t$ such that
+$I_j^0 - \smallsum_{t' \le t} \abs{D_{j,t'}} + \hat{Q} \le S_j$.
+At this time period, enough inventory will have been depleted that a full shipload can be discharged into inventory.
+
+However, in the VRPTW, there is no need to use a discretized view of time, and we can obtain a sharper lower bound for the time window.
+Define $D_j^C : t \mapsto D_{j,t'}$ if $t \in [t',t'+1)$, 
+as a (piecewise) continuous version of the consumption at demand port $j$.
+Then we can define the lower bound of the time window as the smallest $t$ such that
+$I_j^0 - \int_{[0,t]} \abs{D_j^C(t')}dt' + \hat{Q} \le S_j$.
+The end of the time window is then the largest $t$ such that
+$I_j^0 - \int_{[0,t]} \abs{D_j^C(t')}dt' \ge 0$.
+This is the latest a ship could arrive before the port completely runs out of inventory.
+
+In the maritime inventory routing setting, we would like a ship to visit an alternating sequence of supply and demand ports.
+To achieve this, we construct extra nodes corresponding to our current set of ports, but with different time windows;
+conceptually they are the same port but at different times (similar to the time-expanded network of MIRP).
+To define these nodes for demand ports, we can index them by the corresponding port, and by how many dischargings have already occurred.
+Again, they all have the same demand level ($\hat{Q}$).
+%($\hat{Q}$ for demand, $-\hat{Q}$ for supply).
+The time windows are simple to determine as well;
+if we have a node $n = (j,q)$, then it corresponds to the demand port $j$ at which $q$ dischargings have occurred.
+The time window is 
+$[a_n,b_n]$,
+where 
+$a_n$ is the smallest $t$ such that
+$I_j^0 - \int_{[0,t]} \abs{D_j^C(t')}dt' + (q+1)\hat{Q} \le S_j$, 
+whereas 
+$b_n$ is the largest $t$ such that
+$I_j^0 - \int_{[0,t]} \abs{D_j^C(t')}dt' + q\hat{Q}\ge 0$.
+
+We proceed similarly for supply ports.
+Node $n = (j,q)$ corresponds to the supply port $j$ at which $q$ loadings have already occurred.
+For the time windows, the earliest a ship can arrive at supply port $j$ that has already been visited $q$ times is the smallest $t$ such that
+$I_j^0 + \int_{[0,t]} \abs{D_j^C(t')}dt' - (q+1)\hat{Q} \ge 0$
+(after enough product is available for another full shipload).
+As well, the latest a ship can arrive is the largest $t$ such that
+$I_j^0 + \int_{[0,t]} \abs{D_j^C(t')}dt' - q\hat{Q} \le S_j$
+(before inventory capacity is exceeded).
+
+
+Question: What if these time windows overlap?
+Conjecture: We can easily post-process a solution to obtain one that obeys the assumptions under which the time windows were constructed;
+perhaps this is really a question of berth limits
+(if, e.g. three time windows overlap, then the port must have at least three berths).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Modifying travel time and costs}
+
+The base arc costs and travel times $\hat{c}_a$ and $\hat{t}_a$ are modified to account for revenue received and loading/discharging times.
+Let $j(n)$ equal the port corresponding to node $n$.
+For all arcs incoming to a (demand) port, we subtract from the cost the revenue received for selling the full shipload of product: 
+${c}_{n,n'} = \hat{c}_{j(n),j(n')} - \hat{Q}R_{j(n')}$.
+Letting $R_j = 0$ for any supply port $j$, we obtain a general rule.
+
+Similarly, we add the loading/discharging time to the travel time of any inbound arcs:
+${t}_{n,n'} = \hat{t}_{j(n),j(n')} + \hat{Q}/\abs{F_{j(n')}}$.
+This enforces a ship to fully load/discharge before the end of the time window at a particular node.
+
+
+\subsection{Designing the network to enforce ship initial conditions}
+
+While the VRPTW formalism does not explicitly consider a fixed number of vehicles, ships for long-haul maritime shipping can be a significant investment, and so in reality a fixed number are available, and may be anywhere in the world at the start of the time horizon.
+To enforce this, we add dummy nodes, one for each ship, which are the only nodes that have arcs incoming from the depot.
+From these dummy nodes, we have arcs going to the node corresponding to the physical location and time at which the ship is first available.
+This can capture details like a ship being in the middle of a long voyage at the start of the time horizon of interest.
+These dummy nodes, like any other node, must be visited exactly once by a route in the solution;
+thus a ship must be used exactly once, although we can add arcs from the dummy node immediately back to the depot, allowing for a ship to ``exit'' without ever being used.
+
+\subsection{Generating routes}
+
+% TODO: use optimal basis of LP relaxation of \eqref{vrptw} to populate candidate routes?
+As mentioned earlier, the number of routes may be so large as to preclude enumerating them.
+Consequently, we use an approximate dynamic programming-type approach to generate the set of routes $R$.
+The assumption is that we have already obtained the MIRP in the VRPTW form \eqref{vrptw}, or at least have the data to do so.
+The basic idea is that, given a value function (estimate) over the nodes, a route may be generated node by node, by starting at the depot then choosing the next node by minimizing the arc cost plus the value function at the next node (``cost-to-go'').
+This is repeated until the route returns to the depot.
+At each step, the value function estimate is updated with this minimizing cost-to-go.
+
+Better exploration, and a more diverse set of routes, is obtained by adding randomization when choosing the next node.
+So if the value function is $v(i)$ and the route constructed so far is $(i_0,i_1,\dots, i_k)$, then the next node is chosen by sampling from the distribution obtained from applying the softmax to the negative cost-to-go values:
+\[
+i_{k+1} \sim P(i | i_k) \equiv \frac{\exp\big( (-c_{i_k,i} - v(i))/S_k \big)}{\smallsum_j \exp((-c_{i_k,j} - v(j))/S_k)}.
+\]
+$S_k > 0$ is a scaling factor that roughly controls how much exploration is performed;
+as $S_k \to +\infty$, the distribution approaches a uniform distribution and more exploration occurs,
+while $S_k \to 0$ will sample the lowest cost-to-go node much more often.
+However, we still update the value function with the minimizing cost-to-go value, i.e. 
+\[
+	v(i_k) \gets \min_j \set{ c_{i_k,j} + v(j) }.
+\]
+% Rather than updating with the true minimizing cost-to-go
+
+While constructing a route, the data associated with it ($c_r$, $\delta_{i,r}$) is saved, and then the process repeats, saving the previous value function for constructing the next route.
+In this way, we should tend to produce better and better routes, without repeating previously generated routes too often.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\bibliographystyle{plain}
+\input{./bib/BibList.tex}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\end{document}
