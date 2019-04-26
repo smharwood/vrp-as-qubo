@@ -160,8 +160,8 @@ def compareQuboAndIsing(exName):
     and compare the objective functions on equivalent spins
     to make sure that the conversion from QUBO to Ising is corect
     """
-    QM, QC = loadQUBOMatrix(exName+'.qubo1')
-    IM, IC = loadIsingMatrix(exName+'.rudy1')
+    QM, QC = loadQUBOMatrix(exName+'.qubo')
+    IM, IC = loadIsingMatrix(exName+'.rudy')
     
     # we at least expect the size of the matrices to be the same
     assert (QM.shape[0] == QM.shape[1]), "QUBO matrix not square"
