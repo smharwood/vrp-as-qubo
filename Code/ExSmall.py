@@ -68,3 +68,16 @@ for route in R:
 prob.exportQUBO('ExSmall.qubo')
 prob.exportMPS('ExSmall.mps')
 prob.exportIsing('ExSmall.rudy')
+
+
+#%%
+# Test sampler in RoutingProblem
+
+#sampler = rp.getSampledKey
+#testD = { 'a':100, 'b':101, 'c':102, 'd':10 }
+#counts = { k:0 for k in testD.keys() }
+#N = 10000
+#for i in range(N):
+#    k,foo = sampler(testD,extent=1)
+#    counts[k] = counts[k] + 1
+#print(counts)

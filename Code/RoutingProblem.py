@@ -70,6 +70,19 @@ class RoutingProblem:
         i = self.getNodeIndex(OName)
         j = self.getNodeIndex(DName)
         self.Arcs[(i,j)] = Arc(self.Nodes[i],self.Nodes[j],Time,Cost)
+        
+    def ignoreNode(self,NodeName):
+        """
+        Kludge to help find a feasible problem
+        The list of nodes that a mip_variable visits might be messed up
+        And arcs will be funky
+        """
+        i = self.getNodeIndex(NodeName)
+        self.Nodes.pop(i)
+        self.NameList.pop(i)
+        for c in self.mip_constraints_T:
+            c.pop(i)
+        return
 
     def checkRoute(self,CandidateRoute):
         """
@@ -160,7 +173,7 @@ class RoutingProblem:
             so it is not "true" DP to find an optimal route
         input
             vf: value function over nodes
-            extent: controls exploration/sampling
+            extent: controls exploration/sampling (0=least amount)
             noCost: do not use arc costs/ stage costs in determining cost-to-go
         """
 
@@ -286,6 +299,15 @@ class RoutingProblem:
             print('All nodes covered!')
         else:
             print('Some node not covered by a route')
+            
+    def addRoutesCG(self):
+        """
+        Add routes based on Column Generation for the LP relaxation;
+        Solve LP relaxation and get dual variables to define reduced cost of arcs
+        Then do some sort of DP
+        """
+        # check out scipy.optimize.linprog
+        return
 
     def exportQUBO(self,filename=None,feasibility=False):
         """
