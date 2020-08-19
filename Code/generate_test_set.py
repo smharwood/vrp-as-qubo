@@ -8,6 +8,7 @@ Test instances for Stanford/Cornell:
 vary TimeHorizon and number of routes added to get different size problems
 """
 
+import argparse, os
 import numpy as np
 from QUBOTools import QUBOContainer
 import ExMIRPg1 as ex
@@ -18,8 +19,8 @@ def main(prefix):
         # define problem and export it
         prob = ex.DefineProblem(TH)
         
-        print('Number of variables/routes: {}'.format(len(prob.mip_variables)))
-        sizing  = "_{}_{}_".format(len(prob.Nodes)-1, len(prob.mip_variables))
+        print('Number of variables/routes: {}'.format(prob.getNumVariables()))
+        sizing  = "_{}_{}_".format(len(prob.Nodes)-1, prob.getNumVariables())
         ising_f_name = os.path.join(prefix, "test"+sizing+"f.rudy")
         ising_o_name = os.path.join(prefix, "test"+sizing+"o.rudy")
 
@@ -34,9 +35,8 @@ def main(prefix):
     return
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description=
-            "Build a set of test problems")
-    parser.add_argument('-p','--prefix',type=str,
+    parser = argparse.ArgumentParser("Build a set of test problems")
+    parser.add_argument('-p','--prefix', type=str, default='',
                         help="Folder to put these test problem definitions")
     args = parser.parse_args()
     main(args.prefix)

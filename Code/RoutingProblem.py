@@ -43,26 +43,24 @@ class RoutingProblem:
 
     def __init__(self):
         # basic data
-        self.NameList = []
+        self.NodeNames = []
         self.Nodes = []
         self.Arcs = dict()
         self.depotIndex = 0 # default depot is zeroth node
         self.vehicleCap = 0
         self.initial_loading = 0
-        # Parameters of the MIP representation
-        # (although its really an integer program)
-        self.mip_costs = []
-        self.mip_constraints_T = []
-        self.mip_variables = []
+        self.routes = []
+        self.route_costs = []
+        self.route_node_visited = []
 
     def getNodeIndex(self, NodeName):
-        return self.NameList.index(NodeName)
+        return self.NodeNames.index(NodeName)
         
     def getNode(self, NodeName):
         return self.Nodes[self.getNodeIndex(NodeName)]
         
     def setDepot(self, DepotName):
-        self.depotIndex = self.NameList.index(DepotName)
+        self.depotIndex = self.NodeNames.index(DepotName)
         return
         
     def setVehicleCap(self, VehicleCap):
