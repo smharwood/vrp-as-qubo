@@ -92,7 +92,7 @@ def DefineProblem(TimeHorizon):
     Define a specific problem given a time horizon
     """
     # Create a routing problem
-    prob = PathBasedRoutingProblem()
+    prob = rp.RoutingProblem()
     
     # A depot node is required
     # CargoSize is vessel capacity,
@@ -182,7 +182,7 @@ def DefineProblem(TimeHorizon):
     # high_cost should be approx as expensive as a "full" route, visiting all nodes
     # For this problem, S1 must be visited every 6 days- indicates how expensive a full route is
     high_cost = (TimeHorizon/6.0)*1500
-    for n in prob.Nodes: print(n)
+    #for n in prob.Nodes: print(n)
     add_routes(prob, TimeHorizon, high_cost)
 
     return prob
