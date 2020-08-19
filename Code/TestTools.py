@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 
 def main():
     parser = argparse.ArgumentParser(description=
-            "Tools to assess Ising problems.\n"+
+            "Tools to assess Ising problems for routing problems.\n"+
             "Will visualize sparsity and optionally evaluate given spins or search for spins.\n"+
             "Assuming structure of TestSet problems, can assess feasibility of spins",
             formatter_class=argparse.RawTextHelpFormatter)
