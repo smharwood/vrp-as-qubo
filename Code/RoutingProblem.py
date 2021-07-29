@@ -456,10 +456,10 @@ class Node:
         negative demand is supply that must be picked up.
     """
 
-    def __init__(self, Name, Demand, TW):
+    def __init__(self, name, demand, TW):
         assert TW[0] <= TW[1], 'Time window for {} not valid: {} > {}'.format(name, TW[0], TW[1])
-        self.name = Name
-        self.demand = Demand
+        self.name = name
+        self.demand = demand
         self.tw = TW
 
     def getName(self):

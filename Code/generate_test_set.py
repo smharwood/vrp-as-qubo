@@ -9,12 +9,12 @@ vary TimeHorizon and number of routes added to get different size problems
 """
 
 import argparse, os
-import numpy as np
 from QUBOTools import QUBOContainer
 import ExMIRPg1 as ex
 
-def main(prefix):
-    horizons = [40]
+def main(prefix, horizons=None):
+    if horizons is None:
+        horizons = [20]
     for TH in horizons:
         # define problem and export it
         prob = ex.DefineProblem(TH)
@@ -35,8 +35,17 @@ def main(prefix):
     return
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser("Build a set of test problems")
-    parser.add_argument('-p','--prefix', type=str, default='',
+    parser = argparse.ArgumentParser(description=
+        "Build a set of test problems\n"+
+        "For example, run as\n"+
+        "python generate_test_set.py -p TestSet -t 20 30 40 50\n"+
+        "to get a test set with four instances of various sizes",
+        formatter_class=argparse.RawTextHelpFormatter)
+    parser.add_argument('-p','--prefix', type=str, default='.',
                         help="Folder to put these test problem definitions")
+    parser.add_argument('-t','--time_horizons', nargs='+', type=float,
+                        help="Time horizons of problems to generate")
     args = parser.parse_args()
-    main(args.prefix)
+    if not os.path.isdir(args.prefix):
+        os.mkdir(args.prefix)
+    main(args.prefix, args.time_horizons)

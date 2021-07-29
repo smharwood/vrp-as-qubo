@@ -9,13 +9,13 @@ Some tools to assess Ising matrices
 import os.path, argparse
 import numpy as np
 import scipy.sparse 
-import matplotlib.pyplot as plt 
+# import matplotlib.pyplot as plt 
 
 
 def main():
     parser = argparse.ArgumentParser(description=
             "Tools to assess Ising problems for routing problems.\n"+
-            "Will visualize sparsity and optionally evaluate given spins or search for spins.\n"+
+            "Can evaluate given spins or search for spins.\n"+
             "Assuming structure of TestSet problems, can assess feasibility of spins",
             formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('-i','--input',type=str,
@@ -37,8 +37,8 @@ def main():
     assert os.path.isfile(matrix_filename), "Matrix file "+matrix_filename+" not found"
     matrix,constant = loadIsingMatrix(matrix_filename)
     print("\nConstant term to add to objective: {}".format(constant))
-    print("Matrix sparsity:")
-    visualizeIsingMatrixSparsity(matrix)
+    #print("Matrix sparsity:")
+    #visualizeIsingMatrixSparsity(matrix)
     
         
     if args.eval:
@@ -213,13 +213,13 @@ def exhaustiveSearch(matrix, constant, stopAtFeasible=False):
     return bestObj, bestSpins
     
 
-def visualizeIsingMatrixSparsity(matrix):
-    """
-    What does the matrix look like?
-    """
-    DenseMatrix = matrix.toarray()
-    plt.spy(DenseMatrix)
-    plt.show()
+# def visualizeIsingMatrixSparsity(matrix):
+#     """
+#     What does the matrix look like?
+#     """
+#     DenseMatrix = matrix.toarray()
+#     plt.spy(DenseMatrix)
+#     plt.show()
     
     
 def compareQuboAndIsing(exName):
@@ -227,7 +227,7 @@ def compareQuboAndIsing(exName):
     Given a root example name exName, load the data in
     exName.qubo and exName.rudy
     and compare the objective functions on equivalent spins
-    to make sure that the conversion from QUBO to Ising is corect
+    to make sure that the conversion from QUBO to Ising is correct
     """
     QM, QC = loadQUBOMatrix(exName+'.qubo')
     IM, IC = loadIsingMatrix(exName+'.rudy')
