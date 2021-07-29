@@ -6,12 +6,81 @@ Created on Thu Dec 20 11:18:24 2018
 
 Some tools to assess Ising matrices
 """
-import sys, os.path
+import os.path, argparse
 import numpy as np
 import scipy.sparse 
 import matplotlib.pyplot as plt 
 
 
+def main():
+    parser = argparse.ArgumentParser(description=
+            "Tools to assess Ising problems for routing problems.\n"+
+            "Will visualize sparsity and optionally evaluate given spins or search for spins.\n"+
+            "Assuming structure of TestSet problems, can assess feasibility of spins",
+            formatter_class=argparse.RawTextHelpFormatter)
+    parser.add_argument('-i','--input',type=str,
+                        help="Name of file containing Ising matrix in sparse format")
+    parser.add_argument('-e','--eval',type=str,action='store',
+                        help="Name of file containing spins to evaluate")
+    parser.add_argument('-s','--search',action='store_const',const=True,
+                        help="Perform exhaustive search for minimizing spins")
+    args = parser.parse_args()
+    
+    # if no input file set, print help
+    if not args.input:
+        parser.print_help()
+        return
+    
+    # load matrix
+    matrix_filename = args.input
+    print("\nUsing matrix from "+matrix_filename)
+    assert os.path.isfile(matrix_filename), "Matrix file "+matrix_filename+" not found"
+    matrix,constant = loadIsingMatrix(matrix_filename)
+    print("\nConstant term to add to objective: {}".format(constant))
+    print("Matrix sparsity:")
+    visualizeIsingMatrixSparsity(matrix)
+    
+        
+    if args.eval:
+        spins_filename = args.eval
+        print("\nEvaluating spins from "+spins_filename)
+        assert os.path.isfile(spins_filename), "Spins file "+spins_filename+" not found"
+        spins = loadSpins(spins_filename)
+        print("Spins: "+str(spins))
+        
+        obj = evaluateIsingObjective(matrix, constant, spins)
+        print("\nObjective is {}".format(obj))
+        
+        # Check for a feasibility problem definition;
+        # This assumes the specific organization of the test set
+        fname_split = matrix_filename.split('.')
+        m_fname_root = fname_split[0]
+        extension = fname_split[1]
+        if m_fname_root[-1] == 'f':
+            # Already a feasibility problem
+            if obj == 0.0:
+                print("Spins are feasible")
+            else:
+                print("Spins are INfeasible, violation = {}".format(obj))
+        else:
+            feas_matrix_filename = m_fname_root[0:-1] + 'f.'+extension
+            if os.path.isfile(feas_matrix_filename):
+                print("Corresponding feasibility problem definition "+feas_matrix_filename+" found")
+                feas_matrix,feas_constant = loadIsingMatrix(feas_matrix_filename)
+                feas_obj = evaluateIsingObjective(feas_matrix, feas_constant, spins)
+                if feas_obj == 0.0:
+                    print("Spins are feasible")
+                else:
+                    print("Spins are INfeasible, violation = {}".format(feas_obj))
+            else:
+                print("Cannot assess feasibility of spins")
+
+    if args.search:
+        print("\nPerforming exhaustive search for minimum")
+        bestObj, bestSpin = exhaustiveSearch(matrix,constant)
+        print("\nBest objective = {} at {}".format(bestObj, bestSpin))
+
+        
 def loadSpins(filename):
     """
     Read spins saved in textfile
@@ -185,32 +254,4 @@ def compareQuboAndIsing(exName):
     
 
 if __name__ == "__main__":
-    
-    args = sys.argv[1:]
-    assert len(args) >= 1, "Need at least a matrix filename"
-        
-    # If we accidentally put the file names in quotes strip those out
-    matrix_filename = args[0].strip('\'\"')
-    print("\nUsing matrix from "+matrix_filename)
-    assert (os.path.isfile(matrix_filename)), "Matrix file "+matrix_filename+" not found"
-
-    matrix,constant = loadIsingMatrix(matrix_filename)
-    print("Matrix sparsity:")
-    visualizeIsingMatrixSparsity(matrix)
-    
-    if len(args) == 1:
-        print("\nPerforming exhaustive search for minimum")
-        bestObj, bestSpin = exhaustiveSearch(matrix,constant)
-        print("\nBest objective = {} at {}".format(bestObj, bestSpin))
-    else :
-        # If we accidentally put the file names in quotes strip those out
-        spins_filename = args[1].strip('\'\"')
-        print("\nEvaluating spins from "+spins_filename)
-        assert (os.path.isfile(spins_filename)), "Spins file "+spins_filename+" not found"
-    
-        spins = loadSpins(spins_filename)
-        print("Spins: "+str(spins))
-        
-        obj = evaluateIsingObjective(matrix, constant, spins)
-        print("\nObjective is {}".format(obj))
-
+    main()
