@@ -1,0 +1,155 @@
+\documentclass[11pt]{article}
+
+\usepackage{amsmath,amssymb,xfrac}
+\usepackage{algorithm,algorithmic}
+\usepackage[margin=1in]{geometry}
+\usepackage{url}
+
+\usepackage{amsthm}
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}{Lemma}
+\newtheorem{proposition}{Proposition}
+\newtheorem{corollary}{Corollary}
+\newtheorem{assumption}{Assumption}
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}
+
+\newcommand{\card}[1]{\left| #1 \right|}
+
+\newcommand{\mbf}{\mathbf}
+\newcommand{\mbb}{\mathbb}
+\newcommand{\mbs}{\boldsymbol}
+\newcommand{\st}{\mathrm{s.t.}\;}
+\newcommand{\tr}{^{\mathrm{T}}}
+\newcommand{\abs}[1]{\left| #1 \right|}
+\newcommand{\norm}[1]{\left\| #1 \right\|}
+\newcommand{\set}[1]{\left\{ #1 \right\}}
+\newcommand{\grad}{\nabla}
+\newcommand{\smallsum}{{\textstyle{\sum}}}
+\newcommand{\symgt}{\succ}
+\newcommand{\symge}{\succeq}
+\renewcommand{\hat}{\widehat}
+\renewcommand{\tilde}{\widetilde}
+
+\newcommand{\0}{\mathbf{0}}
+\renewcommand{\a}{\mathbf{a}}
+\renewcommand{\b}{\mathbf{b}}
+\renewcommand{\c}{\mathbf{c}}
+\renewcommand{\d}{\mathbf{d}}
+\newcommand{\g}{\mathbf{g}}
+\newcommand{\q}{\mathbf{q}}
+\renewcommand{\r}{\mathbf{r}}
+\newcommand{\s}{\mathbf{s}}
+\renewcommand{\u}{\mathbf{u}}
+\renewcommand{\v}{\mathbf{v}}
+\newcommand{\w}{\mathbf{w}}
+\newcommand{\x}{\mathbf{x}}
+\newcommand{\y}{\mathbf{y}}
+\newcommand{\z}{\mathbf{z}}
+
+\title{Sequence-based formulation of MIRP}
+%\author{Stuart M. Harwood \and Dimitar Trenev}
+\date{\today}
+
+\begin{document}
+\maketitle
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Formulation}
+
+Our problem is a vehicle routing problem with time windows (VRPTW).
+We use a sequencing-based formulation to obtain a math program.
+The setting is a graph with nodes $N \cup \set{d}$ and edges $E$.
+Edges $(i,j) \in E$ have a cost $c_{i,j}$.
+All nodes $n \in N$ have the same level of demand.
+There is a set of vehicles $V$ available.
+Assume they are homogeneous.
+Each vehicle starts from the depot $d$, and we assume that the depot is ``absorbing'':
+if a vehicle returns to the depot, it must remain there.
+Consequently, assume $(d,d) \in E$.
+The capacity of the vehicles and uniform demand levels imposes a maximum number of stops $P$ that the vehicles can make.
+
+The variables of the math program are
+\begin{itemize}
+\item $x_{v,p,i} \in \set{0,1}$ : Vehicle $v$ visits node $i$ at position $p$ in its sequence ($1$) or not ($0$).
+\end{itemize}
+
+
+The formulation to minimize cost of travel while servicing each node is
+\begin{align}
+\min_x\; & \sum_v \sum_{p < P} \sum_{(i,j) \in E} c_{i,j} x_{v,p,i} x_{v,p+1,j} \\
+\st
+&\label{con:1}  \sum_{v \in V} \sum_{p=0}^P x_{v,p,i} = 1, \quad \forall i \in N, \\
+&\label{con:2}  \sum_{i \in N \cup \set{d}} x_{v,p,i} = 1, \quad \forall v \in V, p \in \set{0,1,\dots,P}, \\
+&\label{con:3}  x_{v,p,i} x_{v,p+1,j} = 0, \quad \forall v \in V, p \in \set{0,1,\dots,P-1}, (i,j) \notin E, \\
+&\label{con:35} x_{v,p,d} x_{v,p+1,j} = 0, \quad \forall v \in V, p \in \set{1,\dots,P-1}, j \ne d\\
+&\label{con:4}  x_{v,0,d} = 1, \quad \forall v \in V, \\
+&\notag         x_{v,p,i} \in \set{0,1}, \quad \forall (v,p,i)
+\end{align}
+
+Constraint~\eqref{con:1} ensures that each node is visited exactly once over all vehicles and sequence positions
+(besides the depot node $d$ -- we specify that each vehicle starts at the depot, and we allow vehicles to return to it).
+Constraint~\eqref{con:2} ensures that each vehicle uses each sequence position once.
+Constraint~\eqref{con:3} ensures that only allowed edges are traversed.
+Constraint~\eqref{con:35} ensures that once a vehicle returns to the depot, it must remain there (cannot travel elsewhere).
+Constraint~\eqref{con:4} ensures that all vehicles start from the depot.
+
+This basic formulation should be augmented with a few extra constraints that fix some variable values.
+We make the assumption that all vehicles start from the depot;
+when combined with the constraints in the base formulation, this implies that some variables must be zero:
+\begin{align}
+&\label{con:5}  x_{v,0,i} = 0, \quad \forall v \in V, i \in N, \\
+&\label{con:6}  x_{v,1,j} = 0, \quad \forall v \in V, (d,j) \notin E.
+\end{align}
+%Constraint~\eqref{con:4} ensures that each vehicle starts at the depot.
+Constraints~\eqref{con:2} and \eqref{con:4} together imply Constraint~\eqref{con:5},
+while Constraints~\eqref{con:3} and \eqref{con:4} together imply Constraint~\eqref{con:6}.
+
+This formulation has bilinearities in the objective and equality constraints.
+Reformulation with linear inequalities is possible to get a mixed-integer linear program.
+We will instead derive an equivalent quadratic unconstrained binary optimization (QUBO) problem.
+
+
+\section{QUBO reformulation}
+Expressing the linear equality constraints of the formulation above as $Ax = b$, an exact penalty reformulation is
+\begin{equation}
+\label{qubo}
+\begin{aligned}
+\min_x\; & \sum_v \sum_p \sum_{(i,j) \in E} c_{i,j} x_{v,p,i} x_{v,p+1,j}  + \rho\norm{Ax - b}^2 +  \rho\sum_v \sum_p \sum_{(i,j) \notin E}  x_{v,p,i} x_{v,p+1,j} \\
+\st
+& \eqref{con:4}, \eqref{con:5}, \eqref{con:6}, \\
+& x_{v,p,i} \in \set{0,1}, \quad \forall (v,p,i).
+\end{aligned}
+\end{equation}
+For penalty parameter $\rho$ sufficiently large, the solutions of the two math programs coincide.
+Looking at the specifics of the constraints and considering that the variables are binary, the smallest value that the penalty terms can take for an infeasible solution is $\rho$ ($=\rho\cdot 1$).
+Thus, $\rho$ needs to be big enough to overwhelm any decrease in the original objective by moving to an infeasible point.
+Imagine flipping each bilinear term from $0$ to $1$ or vice versa depending on the sign of $c_{i,j}$;
+we can upper bound that change in objective by
+$\sum_v \sum_p \sum_{(i,j) \in E} \abs{c_{i,j}} = P\card{V} \sum_{(i,j) \in E} \abs{c_{i,j}}$.
+Thus 
+\[
+\rho > P\card{V} \sum_{(i,j) \in E} \abs{c_{i,j}}
+\]
+suffices.
+%
+The term $\norm{Ax - b}^2$ expands to $x\tr A\tr A x - 2 b\tr Ax + b\tr b$.
+We can add the other bilinear terms from the objective and penalty to get an objective in the form $x\tr Q x$, as desired for a QUBO.
+
+
+\section{MIRP considerations}
+Similar to the path-based formulation, ship (vehicle) capacity determines the demand levels and time windows of the nodes.
+Nodes have a fairly narrow time window compared to travel times and the overall time horizon;
+we use these time windows and travel times to remove edges from the graph that cannot participate in the solution.
+Specifically, if the end of the time window of node $i$ plus the travel time $t_{i,j}$ is greater than the end of the time window of node $j$, then that edge is removed.
+Further, we enforce an alternating sequence of supply and demand nodes by pruning out all other edges.
+Vehicle starting positions are enforced through dummy nodes and appropriate edges.
+A maximum number of sequence positions can be estimated from the shortest travel time and the time horizon.
+The reason we consider the depot ``absorbing'' is to allow an overestimate of this number.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\bibliographystyle{plain}
+%\input{./bib/BibList.tex}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\end{document}
