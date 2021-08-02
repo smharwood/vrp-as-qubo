@@ -10,7 +10,7 @@ Some modifications
 """
 import numpy as np
 from itertools import product
-import RoutingProblem as rp
+import path_based.RoutingProblem as rp
 
 
 def time_window(prevVisits, initial_inv, rate, tankage, size):
@@ -201,4 +201,33 @@ def add_routes(problem, TimeHorizon, high_cost):
     for (explore, rep) in zip([0, 1, np.inf], [1, int(TimeHorizon), int(10*TimeHorizon)]):
         for _ in range(rep):
             problem.addRoutes_better(explore, node_costs, time_costs)
+    return
+
+def getQUBO(TimeHorizon, feasibility=False):
+    """
+    Define the problem and actually get back the QUBO matrix
+    """
+    prob = DefineProblem(TimeHorizon)
+    # get matrix and constant defining QUBO
+    # use automatically calculated penalty parameter
+    return prob.getQUBO(None,feasibility)
+
+# def getCplexProb(TimeHorizon):
+#     """
+#     Define the problem and get CPLEX object encoding problem
+#     """
+#     prob = DefineProblem(TimeHorizon)
+#     return prob.getCplexProb()
+
+def test():
+    prob = DefineProblem(31)
+    cp = prob.getCplexProb()
+    for n in prob.Nodes: print(n)
+#    for a in prob.Arcs.values(): print(a)
+    print('Num variables: {}'.format(prob.getNumVariables()))
+    prob.export_mip('ExMIRPg1.lp')
+    cp.solve()
+    soln = cp.solution.get_values()
+    routes = prob.getRoutes(soln)
+    print("\nSolution status: "+cp.solution.get_status_string())
     return

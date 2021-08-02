@@ -7,7 +7,6 @@ Created on 6 December 2019
 Container for a sequence-based formulation of a 
 Vehicle Routing Problem with Time Windows
 """
-import sys
 import numpy
 import scipy.sparse as sparse
 from itertools import product
@@ -606,9 +605,9 @@ class Node:
     """
     A node is a customer, which must be visited in a particular window of time
     """
-    def __init__(self, Name, TW):
+    def __init__(self, name, TW):
         assert TW[0] <= TW[1], 'Time window for {} not valid: {} > {}'.format(name, TW[0], TW[1])
-        self.name = Name
+        self.name = name
         self.tw = TW
     def getName(self):
         return self.name

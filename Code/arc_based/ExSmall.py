@@ -12,7 +12,6 @@ to test stuff
 """
 import numpy as np
 import arc_based.RoutingProblem as rp
-#import optimization.mirp_encoding.QUBOTools as qt
 
 
 def DefineProblem(time_points=None):

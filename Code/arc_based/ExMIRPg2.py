@@ -7,7 +7,6 @@ Created on 5 December 2019
 import time
 import numpy as np
 import arc_based.RoutingProblem as rp
-#from optimization.mirp_encoding.utils import count_sol, export_sol_metrics
 
 """
 Adapting something that looks like a MIRPLib instance to fit 

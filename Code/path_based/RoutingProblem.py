@@ -10,11 +10,13 @@ See Desrochers, Desrosiers, Solomon, "A new optimization algorithm for the vehic
 
 The ultimate goal is to express an instance as a Quadratic Unconstrained Binary Optimization problem
 """
-
+import logging
 import numpy
 import scipy.sparse as sparse
 from scipy.special import softmax
-from itertools import repeat
+#import cplex
+
+logger = logging.getLogger(__name__)
 
 class RoutingProblem:
     """
@@ -411,6 +413,59 @@ class RoutingProblem:
         # constant term of QUBO objective
         constant = penalty_parameter * blec_constraints_rhs.dot(blec_constraints_rhs)
         return Q, constant
+
+    def getCplexProb(self):
+        """ Get a CPLEX object containing the BLEC/MIP representation
+
+        args:
+        None
+
+        Return:
+        cplex_prob (cplex.Cplex): A CPLEX object defining the MIP problem
+        """
+        cplex_prob = cplex.Cplex()
+
+        # Get BLEC/MIP data (but convert to lists for CPLEX)
+        blec_cost, blec_constraints_matrix, blec_constraints_rhs = self.getBLECdata()
+        # Variables: all binary
+        # constraints: all equality
+        var_types = [cplex_prob.variables.type.binary] * len(blec_cost)
+        con_types = ['E'] * len(blec_constraints_rhs)
+        (rows, cols) = numpy.nonzero(blec_constraints_matrix)
+        vals = blec_constraints_matrix[(rows, cols)]
+        rows = rows.tolist()
+        cols = cols.tolist()
+        vals = vals.tolist()
+
+        # Variable names: node index sequence
+        # Given a route (a list of indices), convert to a single string of those indices
+        route_namer = lambda r: 'r_' + '_'.join(map(lambda i: '{}'.format(i), r))
+        vnames = list(map(route_namer, self.routes))
+        # Constraint names: name after node index
+        cnames = list(map(lambda i: 'cNode_{}'.format(i), range(len(self.Nodes))))
+        cnames.pop(self.depotIndex)
+
+        # define object
+        cplex_prob.objective.set_sense(cplex_prob.objective.sense.minimize)
+        cplex_prob.variables.add(obj=blec_cost.tolist(), types=var_types, names=vnames)
+        cplex_prob.linear_constraints.add(rhs=blec_constraints_rhs.tolist(), senses=con_types,
+                                          names=cnames)
+        cplex_prob.linear_constraints.set_coefficients(zip(rows, cols, vals))
+        return cplex_prob
+
+    def export_mip(self, filename=None):
+        """ Export BLEC/MIP representation of problem """
+        if filename is None:
+            filename = 'path_based_rp.lp'
+        cplex_prob = self.getCplexProb()
+        cplex_prob.write(filename)
+        return
+
+    def solveCplexProb(self, filename_sol='cplex.sol'):
+        cplex_prob = self.getCplexProb()
+        cplex_prob.solve()
+        cplex_prob.solution.write(filename_sol)
+        return
 
 
 def getSampledKey(KeyVal, explore):

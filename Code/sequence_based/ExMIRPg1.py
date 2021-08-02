@@ -9,10 +9,9 @@ https://mirplib.scl.gatech.edu/sites/default/files/LR1_2_DR1_3_VC2_V6a.txt
 
 Some modifications
 """
-import time
 import numpy as np
 from itertools import product
-from sequence_based.RoutingProblem import RoutingProblem as SequenceBasedRoutingProblem
+import sequence_based.RoutingProblem as rp
 
 
 def time_window(prevVisits, initial_inv, rate, tankage, size):
@@ -94,7 +93,7 @@ def DefineProblem(TimeHorizon):
     Define a specific problem given a time horizon
     """
     # Create a routing problem
-    prob = SequenceBasedRoutingProblem()
+    prob = rp.RoutingProblem()
     
     # A depot node is required
     # CargoSize is vessel capacity

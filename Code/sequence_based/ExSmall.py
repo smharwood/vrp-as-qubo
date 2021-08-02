@@ -11,7 +11,7 @@ Desrochers, Desrosiers, Solomon, "A new optimization algorithm for the vehicle r
 to test stuff
 """
 import numpy as np
-from sequence_based.RoutingProblem import RoutingProblem as SequenceBasedRoutingProblem
+import sequence_based.RoutingProblem as rp
 
 # NOTE
 # With only one vehicle, this problem will be infeasible given the way time windows are handled:
@@ -26,7 +26,7 @@ def DefineProblem(numVehicles, maxSequenceLength):
     # D-1-2-3-D
     # Alternatively, if we cared more about capacity, 
     # we would link max number of stops with vehicle capacity and demand
-    prob = SequenceBasedRoutingProblem()
+    prob = rp.RoutingProblem()
     prob.setMaxVehicles(numVehicles)
     prob.setMaxSequenceLength(maxSequenceLength)
     

@@ -1,7 +1,7 @@
 import datetime
 import numpy as np
-import scipy as sp
-from scipy import sparse
+from TestTools import loadQUBOMatrix
+
 
 # inline functions for converting numpy arrays(!) of binary values {0,1} to/from {1,-1}
 x_to_s = lambda x: (1 - 2 * x).astype(int)
@@ -272,8 +272,6 @@ if __name__ == '__main__':
     print(" Objective function discrepancy: ", max_err)
 
     # Print out objective function statistics / QUBO metrics for our usual test problem.
-    from path_based.TestTools import loadQUBOMatrix
-
     matrix, constant = loadQUBOMatrix('path_based/ExSmall.qubo')
     qb = QUBOContainer(matrix, constant)
     print("Metrics for test problem:", qb.report(True))

@@ -4,10 +4,6 @@ Created on 5 December 2019
 
 @author: stuart.m.harwood@exxonmobil.com
 """
-import time
-
-#from optimization.mirp_encoding.utils import count_sol, export_sol_metrics
-
 """
 Adapting something that looks like a MIRPLib instance to fit 
 a sequence-based Vehicle Routing Problem with Time Windows formulation
@@ -18,9 +14,8 @@ This is one of the first "group 2" instances
 Six identical vessels, one supply port, two demand ports
 Time horizon can be adjusted
 """
-
-from sequence_based.RoutingProblem import RoutingProblem as SequenceBasedRoutingProblem
 import numpy as np
+import sequence_based.RoutingProblem as rp
 
 
 def dTimeWindow(prevVisits,initial,rate,size,tankage):
@@ -75,8 +70,7 @@ def DefineProblem(TimeHorizon):
     Define a specific problem given a time horizon
     """
     # Create a routing problem
-    #prob = rp.RoutingProblem()
-    prob = SequenceBasedRoutingProblem()
+    prob = rp.RoutingProblem()
 
     # CargoSize is actual vehicle capacity
     CargoSize = 300
@@ -210,19 +204,6 @@ def test_solve():
         print()
     return
 
-def test_metrics():
-    TH = 20
-    prob = DefineProblem(TH)
-    sol_time = time.time()
-    prob.solveCplexProb('ExMIRP.sol')
-    sol_time = time.time() - sol_time
-
-    n_opt_sol = count_sol(prob.getCplexProb(), criteria=0)
-    n_feas_sol = count_sol(prob.getCplexProb(), criteria=1)
-    export_sol_metrics(sol_time, n_opt_sol, n_feas_sol)
-    return
-
 if __name__ == "__main__":
     test(feas=True)
     test_solve()
-#    test_metrics()

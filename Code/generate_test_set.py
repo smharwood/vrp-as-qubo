@@ -7,39 +7,54 @@ Created on Mon Sep 30 16:37:45 2019
 Test instances for Stanford/Cornell:
 vary TimeHorizon and number of routes added to get different size problems
 """
-
 import argparse, os
+from itertools import product
 from QUBOTools import QUBOContainer
-import ExMIRPg1 as ex
+import arc_based.ExMIRPg1 as abex
+import path_based.ExMIRPg1 as pbex
+import sequence_based.ExMIRPg1 as sbex
+
 
 def main(prefix, horizons=None):
     if horizons is None:
         horizons = [20]
-    for TH in horizons:
+    
+    formulations = [abex, pbex, sbex]
+    for (TH, ex) in product(horizons, formulations):
+        mod = ex.__name__.split('.')[0]
+        name = ''.join([w[0] for w in mod.split('_')])
+
         # define problem and export it
         prob = ex.DefineProblem(TH)
         
-        print('Number of variables/routes: {}'.format(prob.getNumVariables()))
-        sizing  = "_{}_{}_".format(len(prob.Nodes)-1, prob.getNumVariables())
-        ising_f_name = os.path.join(prefix, "test"+sizing+"f.rudy")
-        ising_o_name = os.path.join(prefix, "test"+sizing+"o.rudy")
-
         # Version with objective:
         Q, c = prob.getQUBO(None, feasibility=False)
         QC = QUBOContainer(Q, c)
+        print("Time horizon {}, formulation {}, number of variables: {}".
+            format(TH, mod, prob.getNumVariables()))
+        bname = "test_{}_{}_".format(name, prob.getNumVariables())
+        ising_o_name = os.path.join(prefix, bname + "o.rudy")
         QC.export(ising_o_name, as_ising=True)
+
         # Feasibility version
         Q, c = prob.getQUBO(None, feasibility=True)
         QC = QUBOContainer(Q, c)
+        ising_f_name = os.path.join(prefix, bname + "f.rudy")
         QC.export(ising_f_name, as_ising=True)
     return
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=
-        "Build a set of test problems\n"+
-        "For example, run as\n"+
+        "Build a set of test problems\n\n"+
+        "For example, running\n"+
         "python generate_test_set.py -p TestSet -t 20 30 40 50\n"+
-        "to get a test set with four instances of various sizes",
+        "builds a test set in the folder \"TestSet\" with 24 total instances\n"+
+        "(\"feasibility\" and \"optimality\" versions for each of three different formulations\n"+
+        "for each of the four time horizons given)\n\n"+
+        "Each file has the name \"test_<formulation>_<size>_<class>.rudy\"\n"+
+        "where <formulation> indicates which formulation is used,\n"+
+        "      <size> indicates the number of variables,\n"+
+        "      <class> indicates whether its a feasibility problem (\'f\', optimal value is zero) or not (\'o\')",
         formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('-p','--prefix', type=str, default='.',
                         help="Folder to put these test problem definitions")

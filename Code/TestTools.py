@@ -179,6 +179,14 @@ def evaluateIsingObjective(matrix, constant, spins):
 
     return objective
 
+def evaluateQUBOObjective(matrix, constant, x):
+    """ Evaluate QUBO objective: x^T M x + constant """
+    (r, c) = matrix.shape
+    assert (r == c), "Matrix not square"
+    assert (r == len(x)), "Number of spins incorrect for matrix"
+
+    return matrix.dot(x).dot(x) + constant
+
 
 def exhaustiveSearch(matrix, constant, stopAtFeasible=False):
     """

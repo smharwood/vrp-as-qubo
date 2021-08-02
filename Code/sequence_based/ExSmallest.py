@@ -5,10 +5,8 @@ Created on 23 December 2019
 @author: smharwo
 """
 import time
-
 import numpy as np
 from sequence_based.RoutingProblem import RoutingProblem as SequenceBasedRoutingProblem
-#from optimization.mirp_encoding.utils import count_sol, export_sol_metrics
 
 
 def DefineProblem(numVehicles=1):
@@ -22,7 +20,7 @@ def DefineProblem(numVehicles=1):
     # we would link max number of stops with vehicle capacity and demand
     prob = SequenceBasedRoutingProblem()
     prob.setMaxVehicles(numVehicles)
-    prob.setMaxSequenceLength(6) # make this larger than necessary (5) to test "absorbing" depot
+    prob.setMaxSequenceLength(5)
     
     # A depot node is required
     prob.addDepot('D',(0,np.inf))
@@ -110,8 +108,7 @@ def test_with_solve(enum_opt=False, enum_feas=False):
     #
     # export_sol_metrics(sol_time, n_opt_sol, n_feas_sol)
 
-
     
 if __name__ == "__main__":
     test()
-    test_with_solve()
+    test_with_solve(enum_opt=True, enum_feas=True)

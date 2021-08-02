@@ -13,8 +13,7 @@ This is one of the first "group 2" instances
 Six identical vessels, one supply port, two demand ports
 Time horizon can be adjusted
 """
-
-import RoutingProblem as rp
+import path_based.RoutingProblem as rp
 
 
 def dTimeWindow(prevVisits,initial,rate,size,tankage):

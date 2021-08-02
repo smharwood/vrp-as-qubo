@@ -7,10 +7,9 @@ Created on 19 December 2019
 Container for a arc-based formulation of a 
 Vehicle Routing Problem with Time Windows
 """
-import sys, time
+import time
 import numpy
 import scipy.sparse as sparse
-from itertools import product
 #import cplex
 
 class RoutingProblem:
