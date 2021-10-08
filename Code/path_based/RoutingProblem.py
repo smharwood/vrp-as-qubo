@@ -10,11 +10,15 @@ See Desrochers, Desrosiers, Solomon, "A new optimization algorithm for the vehic
 
 The ultimate goal is to express an instance as a Quadratic Unconstrained Binary Optimization problem
 """
+# from Code.QUBOTools import B
 import logging
 import numpy
 import scipy.sparse as sparse
 from scipy.special import softmax
-#import cplex
+try:
+    import cplex
+except ImportError:
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -343,6 +347,27 @@ class RoutingProblem:
         mask[self.depotIndex] = False
         blec_constraints_matrix = blec_constraints_matrix[mask, :]
         return blec_cost, blec_constraints_matrix, blec_constraints_rhs
+
+    def getLinearizedConstraintData(self):
+        """
+        Return linear(ized) constraints in a consistent way
+        A_eq * x = b
+        A_ineq * x \le b
+
+        Parameters:
+
+        Return:
+            A_eq (array): 2-d array of linear equality constraints
+            b_eq (array): 1-d array of right-hand side of equality constraints
+            A_ineq (array or None): 2-d array of linear inequality constraints
+                (or None if there are no inequality constraints)
+            b_ineq (array or None): 1-d array of right-hand side of inequality
+                constraints (or None)
+        """
+        _, A_eq, b_eq = self.getBLECdata()
+        n = self.getNumVariables()
+        return A_eq, b_eq, numpy.zeros((0,n)), numpy.zeros(0)
+
 
     def getQUBO(self, penalty_parameter=None, feasibility=False):
         """ Get the Quadratic Unconstrained Binary Optimization problem reformulation of the BLEC

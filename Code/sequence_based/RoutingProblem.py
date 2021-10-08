@@ -10,7 +10,10 @@ Vehicle Routing Problem with Time Windows
 import numpy
 import scipy.sparse as sparse
 from itertools import product
-#import cplex
+try:
+    import cplex
+except ImportError:
+    pass
 
 class RoutingProblem:
     """
@@ -439,6 +442,50 @@ class RoutingProblem:
             sum_arc_cost = sum([numpy.fabs(arc.getCost()) for arc in self.Arcs.values()])
             sufficient_pp = self.maxSequenceLength*self.maxVehicles*sum_arc_cost
         return sufficient_pp
+
+    def getLinearizedConstraintData(self):
+        """
+        Return linear(ized) constraints in a consistent way
+        A_eq * x = b
+        A_ineq * x \le b
+
+        Parameters:
+
+        Return:
+            A_eq (array): 2-d array of linear equality constraints
+            b_eq (array): 1-d array of right-hand side of equality constraints
+            A_ineq (array or None): 2-d array of linear inequality constraints
+                (or None if there are no inequality constraints)
+            b_ineq (array or None): 1-d array of right-hand side of inequality
+                constraints (or None)
+        """
+        self.build_bpec_constraints()
+        self.build_bpec_quadratic_constraints()
+        A_eq = self.bpec_constraints_matrix
+        b_eq = self.bpec_constraints_rhs
+        # as in getCplexProb, linearize bilinear constraints
+        # x_i * x_j = 0
+        # <==>
+        # x_i + x_j <= 1 (when vars are binary)
+        row = []
+        col = []
+        val = []
+        rhs = []
+        for k in range(self.bpec_q.nnz):
+            # for each nonzero (bilinear) term
+            # we have an inequality constraint (a new row)
+            # and two nonzero entries in that row
+            row.append(k)
+            col.append(self.bpec_q.row[k])
+            val.append(1.0)
+            row.append(k)
+            col.append(self.bpec_q.col[k])
+            val.append(1.0)
+            rhs.append(1.0)
+        n = self.getNumVariables()
+        A_ineq = sparse.coo_matrix((val,(row,col)), shape=(self.bpec_q.nnz,n))
+        b_ineq = numpy.array(rhs)
+        return A_eq, b_eq, A_ineq, b_ineq
 
     def getQUBO(self, penalty_parameter=None, feasibility=False):
         """
