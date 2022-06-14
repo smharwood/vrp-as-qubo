@@ -157,7 +157,10 @@ def loadQUBOMatrix(filename):
 def loadIsingMatrix(filename):
     return loadMatrix(filename, '#')
 
-
+def get_ising_j_h(matrix):
+    """ Get 'J' matrix and 'h' vector from matrix """
+    return
+    
 def evaluateIsingObjective(matrix, constant, spins):
     """
     Given a vector of {-1,+1} spins/variables,
