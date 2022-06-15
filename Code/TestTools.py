@@ -5,12 +5,11 @@ Created on Thu Dec 20 11:18:24 2018
 @author: smharwo
 
 Some tools to assess Ising matrices
+Note that these methods prefer to work with sparse matrices
 """
 import os.path, argparse
 import numpy as np
 import scipy.sparse 
-# import matplotlib.pyplot as plt 
-
 
 def main():
     parser = argparse.ArgumentParser(description=
@@ -35,11 +34,10 @@ def main():
     matrix_filename = args.input
     print("\nUsing matrix from "+matrix_filename)
     assert os.path.isfile(matrix_filename), "Matrix file "+matrix_filename+" not found"
-    matrix,constant = loadIsingMatrix(matrix_filename)
+    matrix, constant = loadIsingMatrix(matrix_filename)
     print("\nConstant term to add to objective: {}".format(constant))
     #print("Matrix sparsity:")
     #visualizeIsingMatrixSparsity(matrix)
-    
         
     if args.eval:
         spins_filename = args.eval
@@ -158,8 +156,27 @@ def loadIsingMatrix(filename):
     return loadMatrix(filename, '#')
 
 def get_ising_j_h(matrix):
-    """ Get 'J' matrix and 'h' vector from matrix """
-    return
+    """ Get 'J' matrix and 'h' vector from matrix 
+    Mutates `matrix` - zeroes out its diagonal
+    """
+    h = np.copy(matrix.diagonal())
+    matrix.setdiag(0)
+    return matrix, h
+
+def Ising_to_QUBO_sparse(J, h, const=0):
+    """ Get QUBO form of Ising problem
+    Does NOT modify inputs
+    """
+    # As opposed to QUBOTools version, this method uses sparse matrices
+    J = scipy.sparse.coo_matrix(J)
+    h = np.asarray(h).flatten()
+    (n, m) = J.shape
+    assert ((n == m) and (
+                n == h.shape[0])), "Expected a square matrix and a vector of compatible size."
+    # Convert Ising to QUBO
+    Q = 4*J - 2*scipy.sparse.diags(J.sum(0).A1 + J.sum(1).A1 + h)
+    c = J.sum() + h.sum() + const
+    return (Q, c)
     
 def evaluateIsingObjective(matrix, constant, spins):
     """
@@ -174,12 +191,10 @@ def evaluateIsingObjective(matrix, constant, spins):
     # calculate Ising objective
     diag = matrix.diagonal()
     objective = constant + diag.dot(spins) + matrix.dot(spins).dot(spins) - sum(diag)
-
     # Subtracting out sum of diagonal is equivalent and is faster than making a copy:
     #MminusDiag = matrix.copy()
     #MminusDiag.setdiag(0)
     #objective = constant + diag.dot(spins) + MminusDiag.dot(spins).dot(spins)
-
     return objective
 
 def evaluateQUBOObjective(matrix, constant, x):
@@ -223,7 +238,7 @@ def exhaustiveSearch(matrix, constant, stopAtFeasible=False):
         
     return bestObj, bestSpins
     
-
+# import matplotlib.pyplot as plt
 # def visualizeIsingMatrixSparsity(matrix):
 #     """
 #     What does the matrix look like?

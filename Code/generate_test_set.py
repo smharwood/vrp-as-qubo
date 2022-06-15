@@ -51,7 +51,6 @@ def gen(prefix, horizons):
         np.savez(bname, A_eq=A_eq, b_eq=b_eq, A_ineq=A_ineq, b_ineq=b_ineq)
         if have_cplex:
             prob.export_mip(bname + "o.lp")
-            # TODO: get timing? time to first solution too?
     return
 
 def main():
