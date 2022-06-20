@@ -8,6 +8,7 @@ given an Ising problem/QUBO, how well do classical methods handle it?
 """
 import os
 import cplex
+import numpy as np
 import scipy.sparse as sp
 import TestTools as TT
 import QUBOTools as QT
@@ -41,6 +42,13 @@ def main(testset_path, verbose=True):
             solution_times[f] = soltime
             # TODO: time to first solution??
             # Export qubo as .lp so we can solve with other solvers?
+            xstar = cplex_prob.solution.get_values()
+            sol_fn = os.path.splitext(f)[0] + ".sol"
+            sol_path = os.path.join(testset_path, sol_fn)
+            with open(sol_path, 'w') as s:
+                spins = QT.x_to_s(np.asarray(xstar))
+                for spin in spins:
+                    s.write("{}\n".format(spin))
             if verbose:
                 print("Instance {}, optimal objective value {} found in {} seconds".format(f, objective, soltime))
     return optimal_objectives, solution_times

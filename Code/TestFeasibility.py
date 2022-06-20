@@ -24,29 +24,37 @@ def test_feasibility(x, A_eq, b_eq, A_ineq, b_ineq):
 
     Returns:
     vio_eq (array): 1-d boolean array of violated equality constraints
-        vio_eq = (A_eq.dot(x) == b_eq)
+        vio_eq = (A_eq.dot(x) != b_eq)
     vio_ineq (array): 1-d boolean array of violated inequality constraints
-        vio_ineq = (A_ineq.dot(x) <= b_ineq)
+        vio_ineq = (A_ineq.dot(x) > b_ineq)
     """
-    vio_eq = (A_eq.dot(x) == b_eq)
-    vio_ineq = (A_ineq.dot(x) <= b_ineq)
+    vio_eq = (A_eq.dot(x) != b_eq)
+    vio_ineq = (A_ineq.dot(x) > b_ineq)
     return vio_eq, vio_ineq
 
 # TODO: test
 def convenience(fname, sname):
+    spins = loadSpins(sname)
+    x = s_to_x(spins)
     f = np.load(fname, allow_pickle=True)
-    # We might be loading a length-1 array of a sparse matrix object;
-    # pull out the right stuff
     A_eq = f["A_eq"]
     b_eq = f["b_eq"]
     A_ineq = f["A_ineq"]
     b_ineq = f["b_ineq"]
-    if sp.issparse(A_eq.item(0)):
-        A_eq = A_eq.item(0)
-    if sp.issparse(A_ineq.item(0)):
-        A_ineq = A_ineq.item(0)
-    spins = loadSpins(sname)
-    x = s_to_x(spins)
+    # If there are equality constraints,
+    # we might be loading a length-1 array of a sparse matrix object;
+    # pull out the right stuff
+    if len(b_eq) > 0:
+        if sp.issparse(A_eq.item(0)):
+            A_eq = A_eq.item(0)
+    # Same with inequalities
+    if len(b_ineq) > 0:
+        if sp.issparse(A_ineq.item(0)):
+            A_ineq = A_ineq.item(0)
+    else:
+        # we don't have inequality constraints
+        # dot product with zero-size sparse array can be screwy...
+        A_ineq = np.zeros((0, len(spins)))
     return test_feasibility(x, A_eq, b_eq, A_ineq, b_ineq)
 
 def main():
