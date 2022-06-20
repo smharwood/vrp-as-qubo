@@ -10,6 +10,7 @@ import os
 import cplex
 import scipy.sparse as sp
 import TestTools as TT
+import QUBOTools as QT
 
 def main(testset_path, verbose=True):
     """
@@ -28,8 +29,8 @@ def main(testset_path, verbose=True):
             # convert to QUBO (so we get a problem with 0-1 variables)
             # construct the relevant CPLEX object
             mat, c = TT.loadIsingMatrix(os.path.join(testset_path, f))
-            J, h = TT.get_ising_j_h(mat)
-            Q, c = TT.Ising_to_QUBO_sparse(J, h, c)
+            J, h = QT.get_Ising_J_h(mat)
+            Q, c = QT.Ising_to_QUBO(J, h, c)
             cplex_prob = build_cplex_from_qubo(Q)
             start = cplex_prob.get_time()
             cplex_prob.solve()

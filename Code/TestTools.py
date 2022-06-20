@@ -9,7 +9,8 @@ Note that these methods prefer to work with sparse matrices
 """
 import os.path, argparse
 import numpy as np
-import scipy.sparse 
+import scipy.sparse
+import QUBOTools as QT
 
 def main():
     parser = argparse.ArgumentParser(description=
@@ -18,9 +19,9 @@ def main():
             "Assuming structure of TestSet problems, can assess feasibility of spins",
             formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('-i','--input',type=str,
-                        help="Name of file containing Ising matrix in sparse format")
+                        help="Path to file containing Ising matrix in sparse format")
     parser.add_argument('-e','--eval',type=str,action='store',
-                        help="Name of file containing spins to evaluate")
+                        help="Path to file containing spins to evaluate")
     parser.add_argument('-s','--search',action='store_const',const=True,
                         help="Perform exhaustive search for minimizing spins")
     args = parser.parse_args()
@@ -31,19 +32,17 @@ def main():
         return
     
     # load matrix
-    matrix_filename = args.input
-    print("\nUsing matrix from "+matrix_filename)
-    assert os.path.isfile(matrix_filename), "Matrix file "+matrix_filename+" not found"
-    matrix, constant = loadIsingMatrix(matrix_filename)
+    matrix_path = args.input
+    print("\nUsing matrix from " + matrix_path)
+    assert os.path.isfile(matrix_path), "Matrix file " + matrix_path + " not found"
+    matrix, constant = loadIsingMatrix(matrix_path)
     print("\nConstant term to add to objective: {}".format(constant))
-    #print("Matrix sparsity:")
-    #visualizeIsingMatrixSparsity(matrix)
-        
+    
     if args.eval:
-        spins_filename = args.eval
-        print("\nEvaluating spins from "+spins_filename)
-        assert os.path.isfile(spins_filename), "Spins file "+spins_filename+" not found"
-        spins = loadSpins(spins_filename)
+        spins_path = args.eval
+        print("\nEvaluating spins from " + spins_path)
+        assert os.path.isfile(spins_path), "Spins file " + spins_path + " not found"
+        spins = loadSpins(spins_path)
         print("Spins: "+str(spins))
         
         obj = evaluateIsingObjective(matrix, constant, spins)
@@ -51,20 +50,21 @@ def main():
         
         # Check for a feasibility problem definition;
         # This assumes the specific organization of the test set
-        fname_split = matrix_filename.split('.')
-        m_fname_root = fname_split[0]
-        extension = fname_split[1]
-        if m_fname_root[-1] == 'f':
+        dir = os.path.dirname(matrix_path)
+        name = os.path.basename(matrix_path)
+        fn_root, fn_ext = os.path.splitext(name)
+        if fn_root[-1] == 'f':
             # Already a feasibility problem
             if obj == 0.0:
                 print("Spins are feasible")
             else:
                 print("Spins are INfeasible, violation = {}".format(obj))
         else:
-            feas_matrix_filename = m_fname_root[0:-1] + 'f.'+extension
-            if os.path.isfile(feas_matrix_filename):
-                print("Corresponding feasibility problem definition "+feas_matrix_filename+" found")
-                feas_matrix,feas_constant = loadIsingMatrix(feas_matrix_filename)
+            feas_matrix_fn = fn_root[0:-1] + 'f' + fn_ext
+            feas_matrix_path = os.path.join(dir, feas_matrix_fn)
+            if os.path.isfile(feas_matrix_path):
+                print("Corresponding feasibility problem definition "+feas_matrix_path+" found")
+                feas_matrix, feas_constant = loadIsingMatrix(feas_matrix_path)
                 feas_obj = evaluateIsingObjective(feas_matrix, feas_constant, spins)
                 if feas_obj == 0.0:
                     print("Spins are feasible")
@@ -75,7 +75,7 @@ def main():
 
     if args.search:
         print("\nPerforming exhaustive search for minimum")
-        bestObj, bestSpin = exhaustiveSearch(matrix,constant)
+        bestObj, bestSpin = exhaustiveSearch(matrix, constant)
         print("\nBest objective = {} at {}".format(bestObj, bestSpin))
 
         
@@ -88,10 +88,10 @@ def loadSpins(filename):
     with open(filename) as f:
         lines = f.readlines()
         if len(lines) == 1:
-            spins = [int(s) for s in lines[0].split()]
+            spins = np.array([int(s) for s in lines[0].split()], dtype=np.short)
             return spins
         else:
-            spins = [int(s) for s in lines]
+            spins = np.array([int(s) for s in lines], dtype=np.short)
             return spins
         
     
@@ -108,6 +108,7 @@ def loadMatrix(filename, comment_char):
     row = []
     col = []
     constant = 0
+    matLength = None
     with open(filename) as f:
         numrows = 0
         numcols = 0
@@ -117,7 +118,7 @@ def loadMatrix(filename, comment_char):
                 # comment line. Get constant of objective if possible;
                 # if the line contains an equal sign the constant is after it
                 split_contents = line.split('=')
-                if len(split_contents)>1:
+                if len(split_contents) > 1:
                     constant = float(split_contents[1])
             elif line[0] == 'p':
                 # 'Sentinel' line (specific to Dwave input- indicates QUBO)
@@ -128,7 +129,7 @@ def loadMatrix(filename, comment_char):
                 # "split()" splits based on arbitrary whitespace
                 contents = line.split()
                 if len(contents) == 2:
-                    # sizing for ISING form
+                    # Potentially get sizing for ISING form
                     # numvars numelements
                     matLength = int(contents[1])
                 else:
@@ -139,11 +140,11 @@ def loadMatrix(filename, comment_char):
                     numrows = max(numrows,max(row))
                     numcols = max(numcols,max(col))
     # end with
-
     # A few sanity checks
-    assert (len(row) == matLength), "Input matrix length discrepancy"
     assert (numrows == numcols), "Input matrix not square"
-
+    if matLength is not None:
+        assert (len(row) == matLength), "Input matrix length discrepancy"
+    # Construct and return
     sparseMatrix = scipy.sparse.coo_matrix((data,(row, col)))
     return sparseMatrix, constant
 
@@ -155,28 +156,21 @@ def loadQUBOMatrix(filename):
 def loadIsingMatrix(filename):
     return loadMatrix(filename, '#')
 
-def get_ising_j_h(matrix):
-    """ Get 'J' matrix and 'h' vector from matrix 
-    Mutates `matrix` - zeroes out its diagonal
-    """
-    h = np.copy(matrix.diagonal())
-    matrix.setdiag(0)
-    return matrix, h
-
-def Ising_to_QUBO_sparse(J, h, const=0):
-    """ Get QUBO form of Ising problem
-    Does NOT modify inputs
-    """
-    # As opposed to QUBOTools version, this method uses sparse matrices
-    J = scipy.sparse.coo_matrix(J)
-    h = np.asarray(h).flatten()
-    (n, m) = J.shape
-    assert ((n == m) and (
-                n == h.shape[0])), "Expected a square matrix and a vector of compatible size."
-    # Convert Ising to QUBO
-    Q = 4*J - 2*scipy.sparse.diags(J.sum(0).A1 + J.sum(1).A1 + h)
-    c = J.sum() + h.sum() + const
-    return (Q, c)
+# def Ising_to_QUBO_sparse(J, h, const=0):
+#     """ Get QUBO form of Ising problem
+#     Does NOT modify inputs
+#     """
+#     # As opposed to QUBOTools version, this method uses sparse matrices
+#     J = scipy.sparse.coo_matrix(J)
+#     h = np.asarray(h).flatten()
+#     (n, m) = J.shape
+#     assert ((n == m) and (
+#                 n == h.shape[0])), "Expected a square matrix and a vector of compatible size."
+#     # Convert Ising to QUBO
+#     # Note: sparse.matrix.sum() returns a numpy matrix, and attribute .A1 is the flattened ndarray
+#     Q = 4*J - 2*scipy.sparse.diags(J.sum(0).A1 + J.sum(1).A1 + h)
+#     c = J.sum() + h.sum() + const
+#     return (Q, c)
     
 def evaluateIsingObjective(matrix, constant, spins):
     """
@@ -237,17 +231,8 @@ def exhaustiveSearch(matrix, constant, stopAtFeasible=False):
             break
         
     return bestObj, bestSpins
-    
-# import matplotlib.pyplot as plt
-# def visualizeIsingMatrixSparsity(matrix):
-#     """
-#     What does the matrix look like?
-#     """
-#     DenseMatrix = matrix.toarray()
-#     plt.spy(DenseMatrix)
-#     plt.show()
-    
-    
+
+# DEPRECATED??
 def compareQuboAndIsing(exName):
     """
     Given a root example name exName, load the data in
@@ -275,9 +260,70 @@ def compareQuboAndIsing(exName):
         # calculate Ising objective
         objectiveI = evaluateIsingObjective(IM, IC, randomS)
         assert objectiveQ == objectiveI, "Test FAILED"
-        
     print('Test passed!')
-    
+    return
+
+def test():
+    """ Test for QUBOTools and TestTools """
+    max_err = 0
+    # Randomize a QUBO matrix
+    N = np.random.randint(5, 16)
+    Q = 100 * np.random.rand() * np.random.rand(N, N)
+    const = 10 * np.random.rand()
+    for i in np.arange(5):
+        # Randomize a binary vector
+        x = (np.random.rand(N)[:] > 0.5).astype(int)
+
+        # Evaluate QUBO objective (x'Ax)
+        resultQ = QT.evaluate_QUBO(Q, const, x)
+
+        # Convert to Ising formulation
+        (J, h, c) = QT.QUBO_to_Ising(Q, const)
+        # Evaluate Ising objective
+        resultI = QT.evaluate_Ising(J, h, c, QT.x_to_s(x))
+
+        # Revert back to QUBO
+        (B, d) = QT.Ising_to_QUBO(J, h, c)
+        # Re-evaluate QUBO objective
+        resultQ2 = QT.evaluate_QUBO(B, d, x)
+
+        err = max(abs(resultQ - resultI), abs(resultQ - resultQ2))
+        if err < 1e-12:
+            print("Test PASSED.\r")
+        else:
+            print("Test FAILED.\r")
+        max_err = err if (err > max_err) else max_err
+    print(" Maximum error: ", max_err)
+
+    # Create a QUBO container
+    qb = QT.QUBOContainer(Q, const)
+    qb_obj = qb.get_objective_function_QUBO()
+    is_obj = qb.get_objective_function_Ising()
+    s = 1 - 2 * ((np.random.rand(N)[:] > 0.5).astype(int))
+    x = QT.s_to_x(s)
+    err = abs(qb_obj(x) - is_obj(s))
+    if err < 1e-12:
+        print("Test PASSED.\r")
+    else:
+        print("Test FAILED.\r")
+    print(" Objective function discrepancy: ", max_err)
+
+    # Play with different patterns
+    qbOG = QT.QUBOContainer(Q, const, pattern="None")
+    qbSymm = QT.QUBOContainer(Q, const, pattern="symmetric")
+    err = abs(qbOG.evaluate_QUBO(x) - qbSymm.evaluate_QUBO(x)) + abs(
+        qbOG.evaluate_QUBO(x) - qb_obj(x))
+    if err < 1e-12:
+        print("Test PASSED.\r")
+    else:
+        print("Test FAILED.\r")
+    print(" Objective function discrepancy: ", max_err)
+
+    # Print out objective function statistics / QUBO metrics for our usual test problem.
+    matrix, constant = loadQUBOMatrix('path_based/ExSmall.qubo')
+    qb = QT.QUBOContainer(matrix, constant)
+    print("Metrics for test problem:", qb.report(True))
+
 
 if __name__ == "__main__":
     main()

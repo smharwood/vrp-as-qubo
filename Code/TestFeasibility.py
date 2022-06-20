@@ -6,6 +6,7 @@ Tool to test feasibility of spins in original (hard-constrained) problem
 """
 import argparse
 import numpy as np
+import scipy.sparse as sp
 from QUBOTools import s_to_x
 from TestTools import loadSpins
 
@@ -31,11 +32,22 @@ def test_feasibility(x, A_eq, b_eq, A_ineq, b_ineq):
     vio_ineq = (A_ineq.dot(x) <= b_ineq)
     return vio_eq, vio_ineq
 
+# TODO: test
 def convenience(fname, sname):
-    f = np.load(fname)
+    f = np.load(fname, allow_pickle=True)
+    # We might be loading a length-1 array of a sparse matrix object;
+    # pull out the right stuff
+    A_eq = f["A_eq"]
+    b_eq = f["b_eq"]
+    A_ineq = f["A_ineq"]
+    b_ineq = f["b_ineq"]
+    if sp.issparse(A_eq.item(0)):
+        A_eq = A_eq.item(0)
+    if sp.issparse(A_ineq.item(0)):
+        A_ineq = A_ineq.item(0)
     spins = loadSpins(sname)
     x = s_to_x(spins)
-    return test_feasibility(x, f['A_eq'], f["b_eq"], f["A_ineq"], f["b_ineq"])
+    return test_feasibility(x, A_eq, b_eq, A_ineq, b_ineq)
 
 def main():
     parser = argparse.ArgumentParser(description=
@@ -53,7 +65,10 @@ def main():
     if args.data is None or args.spins is None:
         parser.print_help()
         return
-    convenience(args.data, args.spins)
+    vio_eq, vio_ineq = convenience(args.data, args.spins)
+    print("Number of unsatisfied constraints:")
+    print("Equalities:   {} out of {}".format(sum(vio_eq), len(vio_eq)))
+    print("Inequalities: {} out of {}".format(sum(vio_ineq), len(vio_ineq)))
 
 if __name__ == "__main__":
     main()
