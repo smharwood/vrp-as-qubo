@@ -156,22 +156,6 @@ def loadQUBOMatrix(filename):
 def loadIsingMatrix(filename):
     return loadMatrix(filename, '#')
 
-# def Ising_to_QUBO_sparse(J, h, const=0):
-#     """ Get QUBO form of Ising problem
-#     Does NOT modify inputs
-#     """
-#     # As opposed to QUBOTools version, this method uses sparse matrices
-#     J = scipy.sparse.coo_matrix(J)
-#     h = np.asarray(h).flatten()
-#     (n, m) = J.shape
-#     assert ((n == m) and (
-#                 n == h.shape[0])), "Expected a square matrix and a vector of compatible size."
-#     # Convert Ising to QUBO
-#     # Note: sparse.matrix.sum() returns a numpy matrix, and attribute .A1 is the flattened ndarray
-#     Q = 4*J - 2*scipy.sparse.diags(J.sum(0).A1 + J.sum(1).A1 + h)
-#     c = J.sum() + h.sum() + const
-#     return (Q, c)
-    
 def evaluateIsingObjective(matrix, constant, spins):
     """
     Given a vector of {-1,+1} spins/variables,
@@ -191,13 +175,12 @@ def evaluateIsingObjective(matrix, constant, spins):
     #objective = constant + diag.dot(spins) + MminusDiag.dot(spins).dot(spins)
     return objective
 
-def evaluateQUBOObjective(matrix, constant, x):
-    """ Evaluate QUBO objective: x^T M x + constant """
-    (r, c) = matrix.shape
-    assert (r == c), "Matrix not square"
-    assert (r == len(x)), "Number of spins incorrect for matrix"
-
-    return matrix.dot(x).dot(x) + constant
+# def evaluateQUBOObjective(matrix, constant, x):
+#     """ Evaluate QUBO objective: x^T M x + constant """
+#     (r, c) = matrix.shape
+#     assert (r == c), "Matrix not square"
+#     assert (r == len(x)), "Number of spins incorrect for matrix"
+#     return matrix.dot(x).dot(x) + constant
 
 
 def exhaustiveSearch(matrix, constant, stopAtFeasible=False):
@@ -232,36 +215,36 @@ def exhaustiveSearch(matrix, constant, stopAtFeasible=False):
         
     return bestObj, bestSpins
 
-# DEPRECATED??
-def compareQuboAndIsing(exName):
-    """
-    Given a root example name exName, load the data in
-    exName.qubo and exName.rudy
-    and compare the objective functions on equivalent spins
-    to make sure that the conversion from QUBO to Ising is correct
-    """
-    QM, QC = loadQUBOMatrix(exName+'.qubo')
-    IM, IC = loadIsingMatrix(exName+'.rudy')
+# # DEPRECATED??
+# def compareQuboAndIsing(exName):
+#     """
+#     Given a root example name exName, load the data in
+#     exName.qubo and exName.rudy
+#     and compare the objective functions on equivalent spins
+#     to make sure that the conversion from QUBO to Ising is correct
+#     """
+#     QM, QC = loadQUBOMatrix(exName+'.qubo')
+#     IM, IC = loadIsingMatrix(exName+'.rudy')
     
-    # we at least expect the size of the matrices to be the same
-    assert (QM.shape[0] == QM.shape[1]), "QUBO matrix not square"
-    assert (IM.shape[0] == IM.shape[1]), "Ising matrix not square"
-    assert (QM.shape == IM.shape), "QUBO and Ising matrices different sizes"
+#     # we at least expect the size of the matrices to be the same
+#     assert (QM.shape[0] == QM.shape[1]), "QUBO matrix not square"
+#     assert (IM.shape[0] == IM.shape[1]), "Ising matrix not square"
+#     assert (QM.shape == IM.shape), "QUBO and Ising matrices different sizes"
     
-    numTest = 100   # number of tests to perform
-    N = QM.shape[0] # number of variables
+#     numTest = 100   # number of tests to perform
+#     N = QM.shape[0] # number of variables
     
-    for k in range(numTest):
-        # random binary variables and corresponding "spins"
-        randomX = np.random.randint(0,2,N)
-        randomS = 2*randomX - 1
-        # calculate QUBO objective
-        objectiveQ = QC + QM.dot(randomX).dot(randomX)
-        # calculate Ising objective
-        objectiveI = evaluateIsingObjective(IM, IC, randomS)
-        assert objectiveQ == objectiveI, "Test FAILED"
-    print('Test passed!')
-    return
+#     for k in range(numTest):
+#         # random binary variables and corresponding "spins"
+#         randomX = np.random.randint(0,2,N)
+#         randomS = 2*randomX - 1
+#         # calculate QUBO objective
+#         objectiveQ = QC + QM.dot(randomX).dot(randomX)
+#         # calculate Ising objective
+#         objectiveI = evaluateIsingObjective(IM, IC, randomS)
+#         assert objectiveQ == objectiveI, "Test FAILED"
+#     print('Test passed!')
+#     return
 
 def test():
     """ Test for QUBOTools and TestTools """

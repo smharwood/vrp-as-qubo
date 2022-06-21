@@ -485,6 +485,9 @@ class RoutingProblem:
         n = self.getNumVariables()
         A_ineq = sparse.coo_matrix((val,(row,col)), shape=(self.bpec_q.nnz,n))
         b_ineq = numpy.array(rhs)
+        # if anything is empty, make sure its dense
+        if len(b_eq) == 0: A_eq = A_eq.toarray()
+        if len(b_ineq) == 0: A_ineq = A_ineq.toarray()
         return A_eq, b_eq, A_ineq, b_ineq
 
     def getQUBO(self, penalty_parameter=None, feasibility=False):

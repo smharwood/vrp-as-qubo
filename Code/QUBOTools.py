@@ -1,8 +1,6 @@
 import datetime
 import numpy as np
 import scipy.sparse as sp
-# from TestTools import loadQUBOMatrix
-
 
 # inline functions for converting numpy arrays(!) of binary values {0,1} to/from {1,-1}
 x_to_s = lambda x: (1 - 2 * x).astype(int)
@@ -48,20 +46,6 @@ def get_Ising_J_h(matrix):
     matrix.setdiag(0)
     return matrix, h
 
-# QUBO -> Ising
-# def QUBO_to_Ising(Q, const=0):
-#     # Work with numpy arrays
-#     matrix = get_np_array(Q)
-#     (n, m) = matrix.shape
-#     assert (n == m), "Expected a square matrix."
-#     # Convert QUBO to Ising
-#     J = matrix * 0.25
-#     h = -0.25 * matrix.sum(0) - 0.25 * matrix.sum(1)
-#     c = 0.25 * matrix.sum() + const
-#     c += np.diag(J).sum()
-#     # Make the diagonal of J zero
-#     J -= np.diag(np.diag(J))
-#     return (J, h, c)
 def QUBO_to_Ising(Q, const=0):
     """ Get Ising form of a QUBO
     Consistent with {0,1} to {-1,+1} variable map 
@@ -83,18 +67,6 @@ def QUBO_to_Ising(Q, const=0):
     J.eliminate_zeros()
     return (J, h, c)
 
-# Ising -> QUBO
-# def Ising_to_QUBO(J, h, const=0):
-#     # Work with numpy arrays
-#     matrix = get_np_array(J)
-#     vector = get_np_array(h).flatten()
-#     (n, m) = matrix.shape
-#     assert ((n == m) and (
-#                 n == vector.shape[0])), "Expected a square matrix and a vector of compatible size."
-#     # Convert Ising to QUBO
-#     Q = matrix * 4 - 2 * np.diag(matrix.sum(0) + matrix.sum(1) + vector)
-#     c = matrix.sum() + vector.sum() + const
-#     return (Q, c)
 def Ising_to_QUBO(J, h, const=0):
     """ Get QUBO form of Ising problem
     Consistent with {-1,+1} to {0,1} variable map 
@@ -114,17 +86,6 @@ def Ising_to_QUBO(J, h, const=0):
     c = J.sum() + h.sum() + const
     return (Q.tocsr(), c)
 
-# Upper-triangular version
-# def to_upper_triangular(M):
-#     # Work with numpy arrays
-#     matrix = get_np_array(M)
-#     (n, m) = matrix.shape
-#     assert (n == m), "Expected a square matrix."
-#     for i in range(n):
-#         for j in range(i + 1, n):
-#             matrix[i][j] += matrix[j][i]
-#             matrix[j][i] = 0.0
-#     return matrix
 def to_upper_triangular(M):
     """ Get upper triangular form of problem matrix
     Returns sparse matrix
@@ -139,17 +100,6 @@ def to_upper_triangular(M):
     UT.eliminate_zeros()
     return UT
 
-# Symmetric version
-# def to_symmetric(M):
-#     # Work with numpy arrays
-#     matrix = np.array(M)
-#     (n, m) = matrix.shape
-#     assert (n == m), "Expected a square matrix."
-#     for i in range(n):
-#         for j in range(i + 1, n):
-#             matrix[i][j] = 0.5 * (matrix[j][i] + matrix[i][j])
-#             matrix[j][i] = matrix[i][j]
-#     return matrix
 def to_symmetric(M):
     """ Get symmetric form of problem matrix
     Returns sparse matrix
@@ -288,64 +238,3 @@ class QUBOContainer:
         with open(filename, 'w') as f:
             f.write("".join(contents))
         return
-
-
-# if __name__ == '__main__':
-#     max_err = 0
-#     # Randomize a QUBO matrix
-#     N = np.random.randint(5, 16)
-#     Q = 100 * np.random.rand() * np.random.rand(N, N)
-#     const = 10 * np.random.rand()
-#     for i in np.arange(5):
-#         # Randomize a binary vector
-#         x = (np.random.rand(N)[:] > 0.5).astype(int)
-
-#         # Evaluate QUBO objective (x'Ax)
-#         resultQ = evaluate_QUBO(Q, const, x)
-
-#         # Convert to Ising formulation
-#         (J, h, c) = QUBO_to_Ising(Q, const)
-#         # Evaluate Ising objective
-#         resultI = evaluate_Ising(J, h, c, x_to_s(x))
-
-#         # Revert back to QUBO
-#         (B, d) = Ising_to_QUBO(J, h, c)
-#         # Re-evaluate QUBO objective
-#         resultQ2 = evaluate_QUBO(B, d, x)
-
-#         err = max(abs(resultQ - resultI), abs(resultQ - resultQ2))
-#         if err < 1e-12:
-#             print("Test PASSED.\r")
-#         else:
-#             print("Test FAILED.\r")
-#         max_err = err if (err > max_err) else max_err
-#     print(" Maximum error: ", max_err)
-
-#     # Create a QUBO container
-#     qb = QUBOContainer(Q, const)
-#     qb_obj = qb.get_objective_function_QUBO()
-#     is_obj = qb.get_objective_function_Ising()
-#     s = 1 - 2 * ((np.random.rand(N)[:] > 0.5).astype(int))
-#     x = s_to_x(s)
-#     err = abs(qb_obj(x) - is_obj(s))
-#     if err < 1e-12:
-#         print("Test PASSED.\r")
-#     else:
-#         print("Test FAILED.\r")
-#     print(" Objective function discrepancy: ", max_err)
-
-#     # Play with different patterns
-#     qbOG = QUBOContainer(Q, const, pattern="None")
-#     qbSymm = QUBOContainer(Q, const, pattern="symmetric")
-#     err = abs(qbOG.evaluate_QUBO(x) - qbSymm.evaluate_QUBO(x)) + abs(
-#         qbOG.evaluate_QUBO(x) - qb_obj(x))
-#     if err < 1e-12:
-#         print("Test PASSED.\r")
-#     else:
-#         print("Test FAILED.\r")
-#     print(" Objective function discrepancy: ", max_err)
-
-#     # Print out objective function statistics / QUBO metrics for our usual test problem.
-#     matrix, constant = loadQUBOMatrix('path_based/ExSmall.qubo')
-#     qb = QUBOContainer(matrix, constant)
-#     print("Metrics for test problem:", qb.report(True))

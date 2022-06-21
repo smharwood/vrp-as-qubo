@@ -54,7 +54,7 @@ def convenience(fname, sname):
     else:
         # we don't have inequality constraints
         # dot product with zero-size sparse array can be screwy...
-        A_ineq = np.zeros((0, len(spins)))
+        A_ineq = np.zeros((0, len(x)))
     return test_feasibility(x, A_eq, b_eq, A_ineq, b_ineq)
 
 def main():
@@ -74,7 +74,7 @@ def main():
         parser.print_help()
         return
     vio_eq, vio_ineq = convenience(args.data, args.spins)
-    print("Number of unsatisfied constraints:")
+    print("Number of UNsatisfied constraints:")
     print("Equalities:   {} out of {}".format(sum(vio_eq), len(vio_eq)))
     print("Inequalities: {} out of {}".format(sum(vio_ineq), len(vio_ineq)))
 

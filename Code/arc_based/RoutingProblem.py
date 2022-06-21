@@ -485,6 +485,8 @@ class RoutingProblem:
         A_eq = self.blec_constraints_matrix
         b_eq = self.blec_constraints_rhs
         n = self.getNumVariables()
+        # if anything is empty, make sure its dense
+        if len(b_eq) == 0: A_eq = A_eq.toarray()
         return A_eq, b_eq, numpy.zeros((0,n)), numpy.zeros(0)
 
     def getQUBO(self, penalty_parameter=None, feasibility=False):
