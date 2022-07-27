@@ -465,21 +465,20 @@ class RoutingProblem:
         cplex_prob.solution.write(filename_sol)
         return
 
-    def getLinearizedConstraintData(self):
+    def getConstraintData(self):
         """
-        Return linear(ized) constraints in a consistent way
-        A_eq * x = b
-        A_ineq * x \le b
+        Return constraints in a consistent way
+        A_eq * x = b_eq
+        xᵀ * Q_eq * x = r_eq
 
         Parameters:
 
         Return:
             A_eq (array): 2-d array of linear equality constraints
             b_eq (array): 1-d array of right-hand side of equality constraints
-            A_ineq (array or None): 2-d array of linear inequality constraints
-                (or None if there are no inequality constraints)
-            b_ineq (array or None): 1-d array of right-hand side of inequality
-                constraints (or None)
+            Q_eq (array): 2-d array of a single quadratic equality constraint
+                (potentially all zeros if there are no nontrivial quadratic constraints)
+            r_eq (float): Right-hand side of the quadratic constraint
         """
         self.build_blec_constraints()
         A_eq = self.blec_constraints_matrix
@@ -487,7 +486,7 @@ class RoutingProblem:
         n = self.getNumVariables()
         # if anything is empty, make sure its dense
         if len(b_eq) == 0: A_eq = A_eq.toarray()
-        return A_eq, b_eq, numpy.zeros((0,n)), numpy.zeros(0)
+        return A_eq, b_eq, sparse.csr_matrix((n,n)), 0
 
     def getQUBO(self, penalty_parameter=None, feasibility=False):
         """

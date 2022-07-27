@@ -443,52 +443,50 @@ class RoutingProblem:
             sufficient_pp = self.maxSequenceLength*self.maxVehicles*sum_arc_cost
         return sufficient_pp
 
-    def getLinearizedConstraintData(self):
+    def getConstraintData(self):
         """
-        Return linear(ized) constraints in a consistent way
-        A_eq * x = b
-        A_ineq * x \le b
+        Return constraints in a consistent way
+        A_eq * x = b_eq
+        xᵀ * Q_eq * x = r_eq
 
         Parameters:
 
         Return:
             A_eq (array): 2-d array of linear equality constraints
             b_eq (array): 1-d array of right-hand side of equality constraints
-            A_ineq (array or None): 2-d array of linear inequality constraints
-                (or None if there are no inequality constraints)
-            b_ineq (array or None): 1-d array of right-hand side of inequality
-                constraints (or None)
+            Q_eq (array): 2-d array of a single quadratic equality constraint
+                (potentially all zeros if there are no nontrivial quadratic constraints)
+            r_eq (float): Right-hand side of the quadratic constraint
         """
         self.build_bpec_constraints()
         self.build_bpec_quadratic_constraints()
         A_eq = self.bpec_constraints_matrix
         b_eq = self.bpec_constraints_rhs
-        # as in getCplexProb, linearize bilinear constraints
-        # x_i * x_j = 0
-        # <==>
-        # x_i + x_j <= 1 (when vars are binary)
-        row = []
-        col = []
-        val = []
-        rhs = []
-        for k in range(self.bpec_q.nnz):
-            # for each nonzero (bilinear) term
-            # we have an inequality constraint (a new row)
-            # and two nonzero entries in that row
-            row.append(k)
-            col.append(self.bpec_q.row[k])
-            val.append(1.0)
-            row.append(k)
-            col.append(self.bpec_q.col[k])
-            val.append(1.0)
-            rhs.append(1.0)
-        n = self.getNumVariables()
-        A_ineq = sparse.coo_matrix((val,(row,col)), shape=(self.bpec_q.nnz,n))
-        b_ineq = numpy.array(rhs)
+        # # as in getCplexProb, linearize bilinear constraints
+        # # x_i * x_j = 0
+        # # <==>
+        # # x_i + x_j <= 1 (when vars are binary)
+        # row = []
+        # col = []
+        # val = []
+        # rhs = []
+        # for k in range(self.bpec_q.nnz):
+        #     # for each nonzero (bilinear) term
+        #     # we have an inequality constraint (a new row)
+        #     # and two nonzero entries in that row
+        #     row.append(k)
+        #     col.append(self.bpec_q.row[k])
+        #     val.append(1.0)
+        #     row.append(k)
+        #     col.append(self.bpec_q.col[k])
+        #     val.append(1.0)
+        #     rhs.append(1.0)
+        # n = self.getNumVariables()
+        Q_eq = sparse.csr_matrix(self.bpec_edgepenalty_bilinear)
+        r_eq = 0
         # if anything is empty, make sure its dense
         if len(b_eq) == 0: A_eq = A_eq.toarray()
-        if len(b_ineq) == 0: A_ineq = A_ineq.toarray()
-        return A_eq, b_eq, A_ineq, b_ineq
+        return A_eq, b_eq, Q_eq, r_eq
 
     def getQUBO(self, penalty_parameter=None, feasibility=False):
         """

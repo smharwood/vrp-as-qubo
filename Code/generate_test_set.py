@@ -50,8 +50,8 @@ def gen(prefix, horizons):
         # Note that some of these matrices might be scipy.sparse,
         # in which case savez is not the most natural way to save them...
         # but we can hack our way around it
-        A_eq, b_eq, A_ineq, b_ineq = prob.getLinearizedConstraintData()
-        np.savez(bname, A_eq=A_eq, b_eq=b_eq, A_ineq=A_ineq, b_ineq=b_ineq)
+        A_eq, b_eq, Q_eq, r_eq = prob.getConstraintData()
+        np.savez(bname, A_eq=A_eq, b_eq=b_eq, Q_eq=Q_eq, r_eq=r_eq)
         if have_cplex:
             prob.export_mip(bname + "o.lp")
     return

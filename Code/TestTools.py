@@ -82,17 +82,13 @@ def main():
 def loadSpins(filename):
     """
     Read spins saved in textfile
-    Either whitespace-separated on one line,
-    or one entry per line
+    Assumes values are separated by whitespace and line breaks,
+    reading left to right and top to bottom.
     """
     with open(filename) as f:
         lines = f.readlines()
-        if len(lines) == 1:
-            spins = np.array([int(s) for s in lines[0].split()], dtype=np.short)
-            return spins
-        else:
-            spins = np.array([int(s) for s in lines], dtype=np.short)
-            return spins
+        spins = np.array([int(s) for line in lines for s in line.split()], dtype=np.short)
+        return spins
         
     
 def loadMatrix(filename, comment_char):

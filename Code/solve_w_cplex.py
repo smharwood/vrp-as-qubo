@@ -13,7 +13,7 @@ import scipy.sparse as sp
 import TestTools as TT
 import QUBOTools as QT
 
-def main(testset_path, verbose=True):
+def solve_all_isings(testset_path, verbose=True):
     """
     Find all the Ising problems in the path (*.rudy's),
     solve with CPLEX
@@ -49,6 +49,34 @@ def main(testset_path, verbose=True):
                 spins = QT.x_to_s(np.asarray(xstar))
                 for spin in spins:
                     s.write("{}\n".format(spin))
+            if verbose:
+                print("Instance {}, optimal objective value {} found in {} seconds".format(f, objective, soltime))
+    return optimal_objectives, solution_times
+
+def solve_all_lps(testset_path, verbose=True):
+    """ Solve all .lp's in a directory with CPLEX """
+    fnames = os.listdir(testset_path)
+    optimal_objectives = dict()
+    solution_times = dict()
+    for f in fnames:
+        if f.split('.')[-1] == "lp":
+            if verbose: print("Processing {}...".format(f))
+            # Found a `.lp`
+            # Load and solve
+            cplex_prob = cplex.Cplex(os.path.join(testset_path, f))
+            start = cplex_prob.get_time()
+            cplex_prob.solve()
+            soltime = cplex_prob.get_time() - start
+            objective = cplex_prob.solution.get_objective_value()
+            optimal_objectives[f] = objective
+            solution_times[f] = soltime
+            # TODO: time to first solution??
+            xstar = cplex_prob.solution.get_values()
+            sol_fn = os.path.splitext(f)[0] + ".sol"
+            sol_path = os.path.join(testset_path, sol_fn)
+            with open(sol_path, 'w') as s:
+                for val in xstar:
+                    s.write("{}\n".format(val))
             if verbose:
                 print("Instance {}, optimal objective value {} found in {} seconds".format(f, objective, soltime))
     return optimal_objectives, solution_times
