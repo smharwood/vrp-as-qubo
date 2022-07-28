@@ -87,7 +87,7 @@ def loadSpins(filename):
     """
     with open(filename) as f:
         lines = f.readlines()
-        spins = np.array([int(s) for line in lines for s in line.split()], dtype=np.short)
+        spins = np.array([int(float(s)) for line in lines for s in line.split()], dtype=np.short)
         return spins
         
     

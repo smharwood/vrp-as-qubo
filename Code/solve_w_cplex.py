@@ -6,12 +6,37 @@ Solve various versions of the routing problems with CPLEX
 Note that we are ignoring the original formulation with hard constraints - 
 given an Ising problem/QUBO, how well do classical methods handle it?
 """
-import os
+import os, argparse
 import cplex
 import numpy as np
 import scipy.sparse as sp
 import TestTools as TT
 import QUBOTools as QT
+
+def main():
+    parser = argparse.ArgumentParser(description=
+        "Solve Ising problems and binary ILP with CPLEX",
+        formatter_class=argparse.RawTextHelpFormatter)
+    parser.add_argument('-p','--prefix', type=str, default='.',
+                        help="Folder to look for problem files")
+    parser.add_argument('-i','--ising', action="store_true",
+                        help="Look for and solve all Ising problems")
+    parser.add_argument('-l','--lp', action="store_true",
+                        help="Look for and solve all ILP problems")
+    parser.add_argument('-v','--verbose', action="store_true",
+                        help="Be verbose")
+    args = parser.parse_args()
+
+    no_action = True
+    if args.ising:
+        solve_all_isings(args.prefix, args.verbose)
+        no_action = False
+    if args.lp:
+        solve_all_lps(args.prefix, args.verbose)
+        no_action = False
+    if no_action:
+        parser.print_help()
+    return
 
 def solve_all_isings(testset_path, verbose=True):
     """
@@ -48,7 +73,7 @@ def solve_all_isings(testset_path, verbose=True):
             with open(sol_path, 'w') as s:
                 spins = QT.x_to_s(np.asarray(xstar))
                 for spin in spins:
-                    s.write("{}\n".format(spin))
+                    s.write("{}\n".format(int(spin)))
             if verbose:
                 print("Instance {}, optimal objective value {} found in {} seconds".format(f, objective, soltime))
     return optimal_objectives, solution_times
@@ -64,19 +89,24 @@ def solve_all_lps(testset_path, verbose=True):
             # Found a `.lp`
             # Load and solve
             cplex_prob = cplex.Cplex(os.path.join(testset_path, f))
+            if not verbose:
+                cplex_prob.set_log_stream(None)
+                cplex_prob.set_results_stream(None)
             start = cplex_prob.get_time()
             cplex_prob.solve()
             soltime = cplex_prob.get_time() - start
-            objective = cplex_prob.solution.get_objective_value()
+            stat = cplex_prob.solution.get_status_string()
+            if stat.lower() == "integer optimal solution":
+                objective = cplex_prob.solution.get_objective_value()
+            else:
+                objective = np.inf
+                if verbose:
+                    print("Instance {}, status {}".format(f, stat))
             optimal_objectives[f] = objective
             solution_times[f] = soltime
             # TODO: time to first solution??
-            xstar = cplex_prob.solution.get_values()
-            sol_fn = os.path.splitext(f)[0] + ".sol"
-            sol_path = os.path.join(testset_path, sol_fn)
-            with open(sol_path, 'w') as s:
-                for val in xstar:
-                    s.write("{}\n".format(val))
+            # NOTE: solution values are probably meaningless
+            # I think reading from the .lp file messes with the variable order
             if verbose:
                 print("Instance {}, optimal objective value {} found in {} seconds".format(f, objective, soltime))
     return optimal_objectives, solution_times
@@ -107,3 +137,6 @@ def build_cplex_from_qubo(Q):
     vals = Qcop.data.tolist()
     cplex_prob.objective.set_quadratic_coefficients(zip(rows,cols,vals))
     return cplex_prob
+
+if __name__ == "__main__":
+    main()

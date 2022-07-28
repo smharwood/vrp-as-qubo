@@ -4,7 +4,7 @@ SM Harwood
 
 Tool to test feasibility of spins in original (hard-constrained) problem
 """
-import argparse
+import os, argparse
 import numpy as np
 import scipy.sparse as sp
 from QUBOTools import s_to_x
@@ -57,6 +57,25 @@ def convenience(fname, sname):
     if sp.issparse(Q_eq.item(0)):
         Q_eq = Q_eq.item(0)
     return test_feasibility(x, A_eq, b_eq, Q_eq, r_eq)
+
+def do_all(prefix, verbose=True):
+    """
+    Find all foo.npz and check the feasibility of foo.sol,
+    if it exists
+    """
+    fnames = os.listdir(prefix)
+    results = dict()
+    for f in fnames:
+        if f.split('.')[-1] == "npz":
+            if verbose: print("Processing {}...".format(f))
+            sol_fn = os.path.splitext(f)[0] + ".sol"
+            sol_path = os.path.join(prefix, sol_fn)
+            f_path = os.path.join(prefix, f)
+            if os.path.isfile(sol_path):
+                results[f] = convenience(f_path, sol_path)
+            elif verbose:
+                print("Could not find corresponding solution file {}".format(sol_path))
+    return results
 
 def main():
     parser = argparse.ArgumentParser(description=

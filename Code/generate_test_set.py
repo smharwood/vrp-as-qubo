@@ -10,7 +10,7 @@ vary TimeHorizon and number of routes added to get different size problems
 import argparse, os
 import numpy as np
 from itertools import product
-from QUBOTools import QUBOContainer
+from QUBOTools import QUBOContainer, x_to_s
 import arc_based.ExMIRPg1 as abex
 import path_based.ExMIRPg1 as pbex
 import sequence_based.ExMIRPg1 as sbex
@@ -52,8 +52,22 @@ def gen(prefix, horizons):
         # but we can hack our way around it
         A_eq, b_eq, Q_eq, r_eq = prob.getConstraintData()
         np.savez(bname, A_eq=A_eq, b_eq=b_eq, Q_eq=Q_eq, r_eq=r_eq)
+
         if have_cplex:
+            # We should solve the problem now - 
+            # variable order might get messed up reading from the .lp
             prob.export_mip(bname + "o.lp")
+            cplex_prob = prob.getCplexProb()
+            cplex_prob.solve()
+            stat = cplex_prob.solution.get_status_string()
+            if stat.lower() != "integer optimal solution":
+                continue
+            xstar = cplex_prob.solution.get_values()
+            sol_path = bname + ".sol"
+            with open(sol_path, 'w') as s:
+                spins = x_to_s(np.asarray(xstar))
+                for spin in spins:
+                    s.write("{}\n".format(int(spin)))
     return
 
 def main():
