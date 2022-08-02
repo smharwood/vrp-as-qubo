@@ -10,6 +10,44 @@ import scipy.sparse as sp
 from QUBOTools import s_to_x
 from TestTools import loadSpins
 
+def main():
+    parser = argparse.ArgumentParser(description=
+        "Test feasibility of spins\n\n"+
+        "Test set should include *.npz files; "+
+        "these include the original problem constraints as linear and "+
+        "quadratic constraints.\n"+
+        "This script will return a measure of the "+
+        "linear and quadratic (if any) constraints that are violated",
+        formatter_class=argparse.RawTextHelpFormatter)
+    parser.add_argument('-d','--data', type=str,
+                        help="Filename of feasibility data ('*.npz')")
+    parser.add_argument('-s','--spins', type=str,
+                        help="Filename of spins\n(whitespace- and/or linebreak-separated)")
+    parser.add_argument('-p','--prefix', type=str,
+                        help="Prefix/path to search for matching *.npz and *.sol and check feasibility")
+    args = parser.parse_args()
+    no_action = True
+
+    if args.prefix is not None:
+        no_action = False
+        results = do_all(args.prefix)
+        for k in results.keys():
+            print("\nSolution {}:".format(k))
+            print_summary(*results[k])
+    if (args.data is not None) and (args.spins is not None):
+        no_action = False
+        vio_l, vio_q, nnz = convenience(args.data, args.spins)
+        print_summary(vio_l, vio_q, nnz)
+    if no_action:
+        parser.print_help()
+    return
+
+def print_summary(vio_l, vio_q, nnz):
+    print("Number of UNsatisfied constraints:")
+    print("Linear:    {} out of {}".format(sum(vio_l), len(vio_l)))
+    print("Quadratic: {} out of {}".format(int(vio_q), nnz))
+    return
+
 def test_feasibility(x, A_eq, b_eq, Q_eq, r_eq):
     """
     Given 0-1 variables and constraints definition, return measures of the
@@ -72,32 +110,10 @@ def do_all(prefix, verbose=True):
             sol_path = os.path.join(prefix, sol_fn)
             f_path = os.path.join(prefix, f)
             if os.path.isfile(sol_path):
-                results[f] = convenience(f_path, sol_path)
+                results[sol_fn] = convenience(f_path, sol_path)
             elif verbose:
                 print("Could not find corresponding solution file {}".format(sol_path))
     return results
-
-def main():
-    parser = argparse.ArgumentParser(description=
-        "Test feasibility of spins\n\n"+
-        "Test set should include *.npz files; "+
-        "these include the original problem constraints as linear and "+
-        "quadratic constraints.\n"+
-        "This script will return a measure of the "+
-        "linear and quadratic (if any) constraints that are violated",
-        formatter_class=argparse.RawTextHelpFormatter)
-    parser.add_argument('-d','--data', type=str,
-                        help="Filename of feasibility data ('*.npz')")
-    parser.add_argument('-s','--spins', type=str,
-                        help="Filename of spins\n(whitespace- and/or linebreak-separated)")
-    args = parser.parse_args()
-    if args.data is None or args.spins is None:
-        parser.print_help()
-        return
-    vio_l, vio_q, nnz = convenience(args.data, args.spins)
-    print("Number of UNsatisfied constraints:")
-    print("Linear:    {} out of {}".format(sum(vio_l), len(vio_l)))
-    print("Quadratic: {} out of {}".format(int(vio_q), nnz))
 
 if __name__ == "__main__":
     main()

@@ -19,6 +19,7 @@ try:
     have_cplex = True
 except ImportError:
     have_cplex = False
+CPLEX_SUCCESS = ["integer optimal solution", "integer optimal, tolerance"]
 
 def gen(prefix, horizons):
     
@@ -60,7 +61,8 @@ def gen(prefix, horizons):
             cplex_prob = prob.getCplexProb()
             cplex_prob.solve()
             stat = cplex_prob.solution.get_status_string()
-            if stat.lower() != "integer optimal solution":
+            if stat.lower() not in CPLEX_SUCCESS:
+                print("No solution written; status: {}".format(stat))
                 continue
             xstar = cplex_prob.solution.get_values()
             sol_path = bname + ".sol"
