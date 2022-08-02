@@ -74,7 +74,6 @@ def test_feasibility(x, A_eq, b_eq, Q_eq, r_eq):
     vio_q = np.dot(x, Q_eq.dot(x)) - r_eq
     return vio_l, vio_q, Q_eq.nnz
 
-# TODO: test
 def convenience(fname, sname):
     spins = loadSpins(sname)
     x = s_to_x(spins)

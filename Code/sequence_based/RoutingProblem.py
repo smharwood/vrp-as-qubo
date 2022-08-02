@@ -25,8 +25,9 @@ class RoutingProblem:
     Quadratic Unconstrained Binary Optimization (QUBO) problem
     """
 
-    def __init__(self):
+    def __init__(self, relaxed=False):
         # basic data
+        self.relaxed = relaxed    # Allow slightly less physical arcs, to potentially get feasible formulation
         self.maxSequenceLength=0  # maximum length of a sequence/number of positions to consider
         self.maxVehicles=0        # maximum number of vehicles to consider
         self.Nodes = []
@@ -87,18 +88,21 @@ class RoutingProblem:
         """
         Add a potentially allowable arc;
         we also check feasibility of TIMING:
-        If Origin = Depot:
-            allow if origin (depot) TimeWindow START plus travel time < destination TimeWindow end
+        If Origin = Depot OR Relaxed formulation:
+            allow if origin TimeWindow START plus travel time < destination TimeWindow end
         Else (Origin != Depot):
-            allow if origin         TimeWindow END   plus travel time < destination TimeWindow end
+            allow if origin TimeWindow END   plus travel time < destination TimeWindow end
 
-        Note that this is a conservative way to enforce timing; 
+        Note that this is a conservative way to enforce timing (unless relaxed); 
         this formulation cannot enforce it much more finely
         """
         i = self.getNodeIndex(OName)
         j = self.getNodeIndex(DName)
-        if i == 0: departure_time = self.Nodes[i].getWindow()[0] # origin is depot
-        else:      departure_time = self.Nodes[i].getWindow()[1]
+        if i == 0 or self.relaxed:
+            # origin is depot, OR this is the relaxed formulation
+            departure_time = self.Nodes[i].getWindow()[0]
+        else:
+            departure_time = self.Nodes[i].getWindow()[1]
         # Add arc if timing works:
         if departure_time + time <= self.Nodes[j].getWindow()[1]:
             self.Arcs[(i,j)] = Arc(self.Nodes[i],self.Nodes[j],time,cost)
@@ -121,36 +125,42 @@ class RoutingProblem:
         num_vars = 0
         # Loop over (vehicles, positions/sequence, nodes)
         # and check if a variable is free/not fixed
-        for vi in range(self.maxVehicles):
-            for si in range(self.maxSequenceLength):
-                for ni in range(len(self.Nodes)):
-                    # Is the variable (vi,si,ni) fixed?
-                    # Check the rules:
-                    # We must start in the depot:
-                    if si == 0 and ni == 0:
+        for si in range(self.maxSequenceLength):
+            for ni in range(len(self.Nodes)):
+                # Is the variable (vi,si,ni) fixed?
+                # Check the rules:
+                # We must start in the depot:
+                if si == 0 and ni == 0:
+                    for vi in range(self.maxVehicles):
                         self.fixedValues[(vi,si,ni)] = 1.0
-                        continue
-                    # We must NOT start anywhere besides depot:
-                    if si == 0 and ni != 0:
+                    continue
+                # We must NOT start anywhere besides depot:
+                if si == 0 and ni != 0:
+                    for vi in range(self.maxVehicles):
                         self.fixedValues[(vi,si,ni)] = 0.0
-                        continue
-                    # We must follow allowed edges from depot
-                    if si == 1 and not self.checkArc((0,ni)):
+                    continue
+                # We must follow allowed edges from depot
+                if si == 1 and not self.checkArc((0,ni)):
+                    for vi in range(self.maxVehicles):
                         self.fixedValues[(vi,si,ni)] = 0.0
-                        continue
-                    # We must END in the depot:
-                    if si == self.maxSequenceLength-1 and ni == 0:
+                    continue
+                # We must END in the depot:
+                if si == self.maxSequenceLength-1 and ni == 0:
+                    for vi in range(self.maxVehicles):
                         self.fixedValues[(vi,si,ni)] = 1.0
-                        continue
-                    # We must NOT end anywhere besides depot:
-                    if si == self.maxSequenceLength-1 and ni != 0:
+                    continue
+                # We must NOT end anywhere besides depot:
+                if si == self.maxSequenceLength-1 and ni != 0:
+                    for vi in range(self.maxVehicles):
                         self.fixedValues[(vi,si,ni)] = 0.0
-                        continue
-                    # We must follow allowed edges back to depot
-                    if si == self.maxSequenceLength-2 and not self.checkArc((ni,0)):
+                    continue
+                # We must follow allowed edges back to depot
+                if si == self.maxSequenceLength-2 and not self.checkArc((ni,0)):
+                    for vi in range(self.maxVehicles):
                         self.fixedValues[(vi,si,ni)] = 0.0
-                        continue
-                    # At this point, variable (vi,si,ni) is free, record the index
+                    continue
+                # At this point, variable (vi,si,ni) is free, record the index
+                for vi in range(self.maxVehicles):
                     self.VarMapping.append((vi,si,ni))
                     num_vars += 1
         # end loops

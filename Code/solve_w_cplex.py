@@ -12,6 +12,9 @@ import numpy as np
 import scipy.sparse as sp
 import TestTools as TT
 import QUBOTools as QT
+# cplex status strings that indicate at least a feasible solution found?
+CPLEX_FEASIBLE = ["integer optimal solution", "integer optimal, tolerance",
+    "solution limit exceeded"]
 
 def main():
     parser = argparse.ArgumentParser(description=
@@ -23,28 +26,30 @@ def main():
                         help="Look for and solve all Ising problems")
     parser.add_argument('-l','--lp', action="store_true",
                         help="Look for and solve all ILP problems")
+    parser.add_argument('-f','--first', action="store_true",
+                        help="Stop at first feasible solution")
     parser.add_argument('-v','--verbose', action="store_true",
                         help="Be verbose")
     args = parser.parse_args()
 
     no_action = True
     if args.ising:
-        solve_all_isings(args.prefix, args.verbose)
+        solve_all_isings(args.prefix, args.first, args.verbose)
         no_action = False
     if args.lp:
-        solve_all_lps(args.prefix, args.verbose)
+        solve_all_lps(args.prefix, args.first, args.verbose)
         no_action = False
     if no_action:
         parser.print_help()
     return
 
-def solve_all_isings(testset_path, verbose=True):
+def solve_all_isings(testset_path, first_feasible=False, verbose=True):
     """
     Find all the Ising problems in the path (*.rudy's),
     solve with CPLEX
     """
     fnames = os.listdir(testset_path)
-    optimal_objectives = dict()
+    objectives = dict()
     solution_times = dict()
     for f in fnames:
         if f.split('.')[-1] == "rudy":
@@ -58,14 +63,18 @@ def solve_all_isings(testset_path, verbose=True):
             J, h = QT.get_Ising_J_h(mat)
             Q, c = QT.Ising_to_QUBO(J, h, c)
             cplex_prob = build_cplex_from_qubo(Q)
+            if first_feasible:
+                # Stop at first feasible solution found...
+                # for an unconstrained problem, is this trivial?
+                if verbose: print("Stopping at first feasible solution")
+                cplex_prob.parameters.mip.limits.solutions.set(1)
             start = cplex_prob.get_time()
             cplex_prob.solve()
             soltime = cplex_prob.get_time() - start
             raw_objective = cplex_prob.solution.get_objective_value()
             objective = raw_objective + c
-            optimal_objectives[f] = objective
+            objectives[f] = objective
             solution_times[f] = soltime
-            # TODO: time to first solution??
             # Export qubo as .lp so we can solve with other solvers?
             xstar = cplex_prob.solution.get_values()
             sol_fn = os.path.splitext(f)[0] + ".sol"
@@ -75,13 +84,13 @@ def solve_all_isings(testset_path, verbose=True):
                 for spin in spins:
                     s.write("{}\n".format(int(spin)))
             if verbose:
-                print("Instance {}, optimal objective value {} found in {} seconds".format(f, objective, soltime))
-    return optimal_objectives, solution_times
+                print("Instance {}, objective value {} found in {} seconds".format(f, objective, soltime))
+    return objectives, solution_times
 
-def solve_all_lps(testset_path, verbose=True):
+def solve_all_lps(testset_path, first_feasible=False, verbose=True):
     """ Solve all .lp's in a directory with CPLEX """
     fnames = os.listdir(testset_path)
-    optimal_objectives = dict()
+    objectives = dict()
     solution_times = dict()
     for f in fnames:
         if f.split('.')[-1] == "lp":
@@ -92,24 +101,27 @@ def solve_all_lps(testset_path, verbose=True):
             if not verbose:
                 cplex_prob.set_log_stream(None)
                 cplex_prob.set_results_stream(None)
+            if first_feasible:
+                # Stop at first feasible solution found
+                if verbose: print("Stopping at first feasible solution")
+                cplex_prob.parameters.mip.limits.solutions.set(1)               
             start = cplex_prob.get_time()
             cplex_prob.solve()
             soltime = cplex_prob.get_time() - start
             stat = cplex_prob.solution.get_status_string()
-            if stat.lower() == "integer optimal solution":
+            if stat.lower() in CPLEX_FEASIBLE:
                 objective = cplex_prob.solution.get_objective_value()
             else:
                 objective = np.inf
                 if verbose:
                     print("Instance {}, status {}".format(f, stat))
-            optimal_objectives[f] = objective
+            objectives[f] = objective
             solution_times[f] = soltime
-            # TODO: time to first solution??
             # NOTE: solution values are probably meaningless
             # I think reading from the .lp file messes with the variable order
             if verbose:
-                print("Instance {}, optimal objective value {} found in {} seconds".format(f, objective, soltime))
-    return optimal_objectives, solution_times
+                print("Instance {}, objective value {} found in {} seconds".format(f, objective, soltime))
+    return objectives, solution_times
 
 def build_cplex_from_qubo(Q):
     """ Get a CPLEX object for the QUBO """

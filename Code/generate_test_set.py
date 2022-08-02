@@ -16,13 +16,14 @@ import path_based.ExMIRPg1 as pbex
 import sequence_based.ExMIRPg1 as sbex
 try:
     import cplex
+    from solve_w_cplex import CPLEX_FEASIBLE
     have_cplex = True
 except ImportError:
     have_cplex = False
-CPLEX_SUCCESS = ["integer optimal solution", "integer optimal, tolerance"]
+
 
 def gen(prefix, horizons):
-    
+    """ Generate test set """
     formulations = [abex, pbex, sbex]
     for (TH, ex) in product(horizons, formulations):
         mod = ex.__name__.split('.')[0]
@@ -61,7 +62,7 @@ def gen(prefix, horizons):
             cplex_prob = prob.getCplexProb()
             cplex_prob.solve()
             stat = cplex_prob.solution.get_status_string()
-            if stat.lower() not in CPLEX_SUCCESS:
+            if stat.lower() not in CPLEX_FEASIBLE:
                 print("No solution written; status: {}".format(stat))
                 continue
             xstar = cplex_prob.solution.get_values()

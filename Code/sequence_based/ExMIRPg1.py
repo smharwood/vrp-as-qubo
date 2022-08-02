@@ -93,7 +93,7 @@ def DefineProblem(TimeHorizon):
     Define a specific problem given a time horizon
     """
     # Create a routing problem
-    prob = rp.RoutingProblem()
+    prob = rp.RoutingProblem(relaxed=True)
     
     # A depot node is required
     # CargoSize is vessel capacity
