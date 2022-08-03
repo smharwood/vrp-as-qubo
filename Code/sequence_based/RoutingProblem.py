@@ -7,7 +7,7 @@ Created on 6 December 2019
 Container for a sequence-based formulation of a 
 Vehicle Routing Problem with Time Windows
 """
-import numpy
+import numpy, time
 import scipy.sparse as sparse
 from itertools import product
 try:
@@ -122,6 +122,7 @@ class RoutingProblem:
         if self.variablesEnumerated:
             return
 
+        start = time.time()
         num_vars = 0
         # Loop over (vehicles, positions/sequence, nodes)
         # and check if a variable is free/not fixed
@@ -164,6 +165,8 @@ class RoutingProblem:
                     self.VarMapping.append((vi,si,ni))
                     num_vars += 1
         # end loops
+        duration = time.time() - start
+        print("Variable enumeration took {} seconds".format(duration))
         self.NumVariables = num_vars
         self.variablesEnumerated = True
         #print("Fixed: {}".format(self.fixedValues))
@@ -259,6 +262,7 @@ class RoutingProblem:
         # These arcs must be penalized in the objective.
         # Keep track with bpec_edgepenalty_bilinear
 
+        start = time.time()
         # for bilinear constraint/penalty terms
         pqval = []
         pqrow = []
@@ -267,20 +271,21 @@ class RoutingProblem:
         # x_{vi,si,ni} * x_{vi,si+1,nj} = 0, \forall vi,si,(ni,nj) \notin Arcs
         # OR
         # x_{vi,si,d}  * x_{vi,si+1,nj} = 0, \forall vi,si>=1, nj \neq d
-        for vi in range(self.maxVehicles):
-            for si in range(self.maxSequenceLength-1):
-                for ni, nj in product(range(len(self.Nodes)),range(len(self.Nodes))):
-                    key = (ni,nj)
-                    # Do we need this constraint?
-                    # Either its not a valid arc, or
-                    # we need to be absorbed by the depot:
-                    # if we are in the depot for any sequence position >= 1,
-                    # we CANNOT move anywhere besides depot
-                    need_constraint = (not self.checkArc(key)) or \
-                                      (si >= 1 and ni == 0 and nj != 0)
-                    if not need_constraint:
-                        #print("{},{},{} to {},{},{} ALLOWED".format(vi,si,ni, vi,si+1,nj))
-                        continue
+        for si in range(self.maxSequenceLength-1):
+            for ni, nj in product(range(len(self.Nodes)),range(len(self.Nodes))):
+                key = (ni,nj)
+                # Do we need this constraint?
+                # Either its not a valid arc, or
+                # we need to be absorbed by the depot:
+                # if we are in the depot for any sequence position >= 1,
+                # we CANNOT move anywhere besides depot
+                need_constraint = (not self.checkArc(key)) or \
+                                    (si >= 1 and ni == 0 and nj != 0)
+                if not need_constraint:
+                    #print("{},{},{} to {},{},{} ALLOWED".format(vi,si,ni, vi,si+1,nj))
+                    continue
+                
+                for vi in range(self.maxVehicles):
                     var_index_1 = self.getVarIndex(vi,si,ni)
                     var_index_2 = self.getVarIndex(vi,si+1,nj)
 
@@ -317,6 +322,8 @@ class RoutingProblem:
         M = self.getNumVariables()
         self.bpec_edgepenalty_bilinear = sparse.coo_matrix((pqval,(pqrow,pqcol)), shape=(M,M))
         self.quad_con_built = True
+        duration = time.time() - start
+        print("Qudratic constraints built in {} seconds".format(duration))
         return
 
     def build_bpec_constraints(self):
@@ -327,6 +334,7 @@ class RoutingProblem:
         if self.lin_con_built: return
         self.enumerateVariables()
 
+        start = time.time()
         aval = []
         arow = []
         acol = []
@@ -379,6 +387,8 @@ class RoutingProblem:
         self.bpec_constraints_matrix = sparse.coo_matrix((aval,(arow,acol)))
         self.bpec_constraints_rhs = numpy.array(brhs)
         self.lin_con_built = True
+        duration = time.time() - start
+        print("Linear constraints built in {} seconds".format(duration))
         return
 
     def getCplexProb(self):

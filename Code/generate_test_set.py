@@ -58,8 +58,10 @@ def gen(prefix, horizons):
         if have_cplex:
             # We should solve the problem now - 
             # variable order might get messed up reading from the .lp
+            # Also, focus on finding feasible solution to test other features
             prob.export_mip(bname + "o.lp")
             cplex_prob = prob.getCplexProb()
+            cplex_prob.parameters.mip.limits.solutions.set(1)
             cplex_prob.solve()
             stat = cplex_prob.solution.get_status_string()
             if stat.lower() not in CPLEX_FEASIBLE:
