@@ -268,63 +268,119 @@ class RoutingProblem:
         pqrow = []
         pqcol = []
 
-        # x_{vi,si,ni} * x_{vi,si+1,nj} = 0, \forall vi,si,(ni,nj) \notin Arcs
-        # OR
-        # x_{vi,si,d}  * x_{vi,si+1,nj} = 0, \forall vi,si>=1, nj \neq d
-        for si in range(self.maxSequenceLength-1):
-            for ni, nj in product(range(len(self.Nodes)),range(len(self.Nodes))):
-                key = (ni,nj)
-                # Do we need this constraint?
-                # Either its not a valid arc, or
-                # we need to be absorbed by the depot:
-                # if we are in the depot for any sequence position >= 1,
-                # we CANNOT move anywhere besides depot
-                need_constraint = (not self.checkArc(key)) or \
-                                    (si >= 1 and ni == 0 and nj != 0)
-                if not need_constraint:
-                    #print("{},{},{} to {},{},{} ALLOWED".format(vi,si,ni, vi,si+1,nj))
-                    continue
+        # # x_{vi,si,ni} * x_{vi,si+1,nj} = 0, \forall vi,si,(ni,nj) \notin Arcs
+        # # OR
+        # # x_{vi,si,d}  * x_{vi,si+1,nj} = 0, \forall vi,si>=1, nj \neq d
+        # for si in range(self.maxSequenceLength-1):
+        #     for ni, nj in product(range(len(self.Nodes)),range(len(self.Nodes))):
+        #         key = (ni,nj)
+        #         # Do we need this constraint?
+        #         # Either its not a valid arc, or
+        #         # we need to be absorbed by the depot:
+        #         # if we are in the depot for any sequence position >= 1,
+        #         # we CANNOT move anywhere besides depot
+        #         need_constraint = (not self.checkArc(key)) or \
+        #                             (si >= 1 and ni == 0 and nj != 0)
+        #         if not need_constraint:
+        #             #print("{},{},{} to {},{},{} ALLOWED".format(vi,si,ni, vi,si+1,nj))
+        #             continue
                 
+        #         for vi in range(self.maxVehicles):
+        #             var_index_1 = self.getVarIndex(vi,si,ni)
+        #             var_index_2 = self.getVarIndex(vi,si+1,nj)
+
+        #             # if one or both variables fixed, check consistency
+        #             # if no variable is fixed, this goes to quadratic constraints
+        #             constant_bool = ((var_index_1 is None) and (var_index_2 is None))
+        #             linear_bool   = ((var_index_1 is None) !=  (var_index_2 is None)) # exclusive or
+        #             quad_bool = not ((var_index_1 is None) or  (var_index_2 is None))
+
+        #             if constant_bool:
+        #                 # constraint is x_i * x_j = 0
+        #                 fixed_val = self.fixedValues[(vi,si,ni)]* \
+        #                             self.fixedValues[(vi,si+1,nj)]
+        #                 assert numpy.isclose(fixed_val, 0.0), "Quadratic constraint not consistent"
+        #             if linear_bool:
+        #                 # constraint is x_i * x_j = 0
+        #                 # If only one value is fixed, it must be zero,
+        #                 # otherwise we have missed a chance to fix a variable
+        #                 fixed_val = 0.0                            
+        #                 if var_index_1 is None:
+        #                     fixed_val += self.fixedValues[(vi,si,ni)]
+        #                     missed_var_index = (vi,si+1,nj)
+        #                 if var_index_2 is None:
+        #                     fixed_val += self.fixedValues[(vi,si+1,nj)]
+        #                     missed_var_index = (vi,si,ni)
+        #                 assert numpy.isclose(fixed_val, 0.0), \
+        #                     "Missed chance to fix variable {}".format(missed_var_index)
+        #             if quad_bool:
+        #                 # either invalid arc or enforcing depot absorption
+        #                 pqrow.append(var_index_1)
+        #                 pqcol.append(var_index_2)
+        #                 pqval.append(1.0)
+
+        # Constraints:
+        # x_{vi,si,ni} * x_{vi,si+1,nj} = 0, \forall vi,si,(ni,nj) \notin Arcs
+        for ni, nj in product(range(len(self.Nodes)),range(len(self.Nodes))):
+            key = (ni,nj)
+            # If this is a valid arc, then there is no constraint
+            if self.checkArc(key): continue
+            for si in range(self.maxSequenceLength-1):
                 for vi in range(self.maxVehicles):
-                    var_index_1 = self.getVarIndex(vi,si,ni)
-                    var_index_2 = self.getVarIndex(vi,si+1,nj)
+                    pqrow, pqcol, pqval = self.quadratic_constraint_logic(vi, si, ni, nj, pqrow, pqcol, pqval)
+        # end loop over node pairs
 
-                    # if one or both variables fixed, check consistency
-                    # if no variable is fixed, this goes to quadratic constraints
-                    constant_bool = ((var_index_1 is None) and (var_index_2 is None))
-                    linear_bool   = ((var_index_1 is None) !=  (var_index_2 is None)) # exclusive or
-                    quad_bool = not ((var_index_1 is None) or  (var_index_2 is None))
-
-                    if constant_bool:
-                        # constraint is x_i * x_j = 0
-                        fixed_val = self.fixedValues[(vi,si,ni)]* \
-                                    self.fixedValues[(vi,si+1,nj)]
-                        assert numpy.isclose(fixed_val, 0.0), "Quadratic constraint not consistent"
-                    if linear_bool:
-                        # constraint is x_i * x_j = 0
-                        # If only one value is fixed, it must be zero,
-                        # otherwise we have missed a chance to fix a variable
-                        fixed_val = 0.0                            
-                        if var_index_1 is None:
-                            fixed_val += self.fixedValues[(vi,si,ni)]
-                            missed_var_index = (vi,si+1,nj)
-                        if var_index_2 is None:
-                            fixed_val += self.fixedValues[(vi,si+1,nj)]
-                            missed_var_index = (vi,si,ni)
-                        assert numpy.isclose(fixed_val, 0.0), \
-                            "Missed chance to fix variable {}".format(missed_var_index)
-                    if quad_bool:
-                        # either invalid arc or enforcing depot absorption
-                        pqrow.append(var_index_1)
-                        pqcol.append(var_index_2)
-                        pqval.append(1.0)
+        # Constraints:
+        # x_{vi,si,d}  * x_{vi,si+1,nj} = 0, \forall vi,si>=1, nj \neq d
+        for vi in range(self.maxVehicles):
+            for si in range(1,self.maxSequenceLength-1):
+                for nj in range(1,len(self.Nodes)):
+                    # If this is not a valid arc, then we already added this constraint above
+                    if not self.checkArc((0,nj)): continue
+                    pqrow, pqcol, pqval = self.quadratic_constraint_logic(vi, si, 0, nj, pqrow, pqcol, pqval)
+        
         # construct sparse matrix for bilinear terms
         M = self.getNumVariables()
         self.bpec_edgepenalty_bilinear = sparse.coo_matrix((pqval,(pqrow,pqcol)), shape=(M,M))
         self.quad_con_built = True
         duration = time.time() - start
-        print("Qudratic constraints built in {} seconds".format(duration))
+        print("Quadratic constraints built in {} seconds".format(duration))
         return
+
+    def quadratic_constraint_logic(self, vi, si, ni, nj, pqrow, pqcol, pqval):
+        var_index_1 = self.getVarIndex(vi,si,ni)
+        var_index_2 = self.getVarIndex(vi,si+1,nj)
+
+        # if one or both variables fixed, check consistency
+        # if no variable is fixed, this goes to quadratic constraints
+        constant_bool = ((var_index_1 is None) and (var_index_2 is None))
+        linear_bool   = ((var_index_1 is None) !=  (var_index_2 is None)) # exclusive or
+        quad_bool = not ((var_index_1 is None) or  (var_index_2 is None))
+
+        if constant_bool:
+            # constraint is x_i * x_j = 0
+            fixed_val = self.fixedValues[(vi,si,ni)]* \
+                        self.fixedValues[(vi,si+1,nj)]
+            assert numpy.isclose(fixed_val, 0.0), "Quadratic constraint not consistent"
+        if linear_bool:
+            # constraint is x_i * x_j = 0
+            # If only one value is fixed, it must be zero,
+            # otherwise we have missed a chance to fix a variable
+            fixed_val = 0.0                            
+            if var_index_1 is None:
+                fixed_val += self.fixedValues[(vi,si,ni)]
+                missed_var_index = (vi,si+1,nj)
+            if var_index_2 is None:
+                fixed_val += self.fixedValues[(vi,si+1,nj)]
+                missed_var_index = (vi,si,ni)
+            assert numpy.isclose(fixed_val, 0.0), \
+                "Missed chance to fix variable {}".format(missed_var_index)
+        if quad_bool:
+            # either invalid arc or enforcing depot absorption
+            pqrow.append(var_index_1)
+            pqcol.append(var_index_2)
+            pqval.append(1.0)
+        return pqrow, pqcol, pqval
 
     def build_bpec_constraints(self):
         """
