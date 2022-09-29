@@ -10,7 +10,6 @@ See Desrochers, Desrosiers, Solomon, "A new optimization algorithm for the vehic
 
 The ultimate goal is to express an instance as a Quadratic Unconstrained Binary Optimization problem
 """
-# from Code.QUBOTools import B
 import logging
 import numpy
 import scipy.sparse as sparse
@@ -178,10 +177,12 @@ class RoutingProblem:
         time += arc.getTravelTime()
         time = max(time, dest.getWindow()[0])
         if time > dest.getWindow()[1]:
+            logger.debug("arc {}: time window bad".format(arcKey))
             return False, time, load
         # Is the load physical (nonnegative and within capacity)?
         load += dest.getLoad()
         if load > self.vehicleCap or load < 0:
+            logger.debug("arc {}: capacity bad".format(arcKey))
             return False, time, load
         return True, time, load
 
@@ -255,7 +256,8 @@ class RoutingProblem:
                 vf[currNode] = PotentialNodesAndVals[minNode]
                 currNode = sampledNode
             except AssertionError:
-                # this probably shouldn't happen
+                # We might hit this if PotentialNodesAndVals is empty,
+                # which might happen if unvisited doesn't have anything connected to depot
                 break
             r.append(currNode)
             # if we have returned to the depot, we are done
@@ -272,24 +274,28 @@ class RoutingProblem:
             of node indexes or node names
 
         Return:
+        feas (bool): Is this route feasible/valid
         added (bool): whether the route was added
-        cost (float): associated cost of route
-        visitsNode (list of int): List indicating whether
-            this route visits Node[i] (visitsNode[i] = 1)
-            or not (visitsNode[i] = 0)
+            (cost ?)
         """
         # If route r is feasible:
         #  cost = c_r
         #  visitsNode[k] = \delta_k,r
+        # However, with make_feasible heuristic, we might add nodes later
+        # The route is just a list of indices, and doesn't need to know how
+        #   many total node there are.
+        # However, visitsNode is an indicator array,
+        #   and will be the incorrect length if nodes are added.
+        # Convert to a list of node indices as well
         feas, cost, visitsNode = self.checkRoute(route)
+        visitsNode_indices = numpy.flatnonzero(visitsNode)
         added = False
         if feas and route not in self.routes:
             self.routes.append(list(route))
             self.route_costs.append(cost)
-            self.route_node_visited.append(visitsNode)
+            self.route_node_visited.append(visitsNode_indices)
             added = True
-        # return a copy of visitsNode so original data is not accidentally changed
-        return added, cost, list(visitsNode)
+        return feas, added
 
     def estimate_max_vehicles(self):
         """ Estimate maximum number of vehicles based on degree of depot node in graph """
@@ -314,21 +320,85 @@ class RoutingProblem:
         time_costs (function): Cost of arrival time at a node; takes a float and returns a float
 
         return:
-        None
+        unvisited_indices (list): List of indices of still unvisited nodes after
+            this construction heuristic
         """
         num_vehicles = self.estimate_max_vehicles()
         unvisited_indices = list(range(len(self.Nodes)))
+        routes = []
 
         # The number of routes that can be added is limited by the number of vehicles
         for _ in range(num_vehicles):
             r, _ = self.generateRoute(None, explore, node_costs, time_costs, unvisited_indices)
-            self.addRoute(r)
-            # update unvisited indices
+            feas, _ = self.addRoute(r)
+            if not feas:
+                continue
+            # else, route is feasible/valid,
+            # whether or not it was added, update unvisited indices
+            routes.append(r)
             for n in r:
                 if n == self.depotIndex:
                     continue
                 unvisited_indices.remove(n)
         # end loop
+        return unvisited_indices, routes
+
+    def make_feasible(self, exit_penalty, time_penalty):
+        """
+        Some sort of greedy construction heuristic to make sure the problem is 
+        feasible. We add dummy node/arcs as necessary to emulate more
+        vehicles being available.
+        """
+        # Add routes greedily (no/little exploration),
+        # but keep the list of unvisited nodes.
+        time_costs = lambda t: time_penalty*t
+        node_costs = [0]*len(self.Nodes)
+        node_costs[self.depotIndex] = exit_penalty
+        unvisited_indices, routes = self.addRoutes_better(0, node_costs, time_costs)
+        unvisited_indices.remove(self.depotIndex)
+
+        # Add arcs and construct routes through the nodes that remain unvisited
+        # Make new arcs as costly as most expensive (regular) route
+        high_cost = numpy.max(self.route_costs)
+        depot_name = self.NodeNames[self.depotIndex]
+        for u in unvisited_indices:
+            # Add arcs and a route through the unvisited node;
+            # to be a valid arc/route, the loading constraints must be satisfied
+            # (see checkArc)
+            # Add a dummy node to ensure loading is satisfied
+            # initial + new_node + unvisited \in [0, vehicleCap]
+            loading = self.initial_loading + self.Nodes[u].getLoad()
+            if loading < 0:
+                new_node_loading = -loading
+            elif loading > self.vehicleCap:
+                new_node_loading = self.vehicleCap - loading
+            else:
+                new_node_loading = 0
+            logger.debug("Unvisited node: {}, loading: {}".format(
+                                self.NodeNames[u], self.Nodes[u].getLoad()
+                            )
+                        )
+            new_node = "mf_Dum_{}".format(u)
+            # Add node - remember, node is defined by DEMAND = -LOADING
+            self.addNode(new_node, -new_node_loading)
+            new_node_index = self.NodeNames.index(new_node)
+            # Add arcs and route through unvisited node
+            # cost of route will be twice high_cost
+            self.addArc(depot_name, new_node, 0, 0)
+            self.addArc(new_node, self.NodeNames[u], 0, high_cost)
+            self.addArc(self.NodeNames[u], depot_name, 0, high_cost)
+            r = [self.depotIndex, new_node_index, u, self.depotIndex]
+            routes.append(r)
+            feas, _ = self.addRoute(r)
+            logger.info("New feasibility route: {}".format(r))
+            assert feas, "Something not right in make_feasible"
+
+        # save this possible solution... make sure it is feasible later??
+        feas_sol = numpy.zeros(len(self.route_costs))
+        for r in routes:
+            i = self.routes.index(r)
+            feas_sol[i] = 1
+        self.feasible_solution = feas_sol
         return
 
     def getBLECdata(self):
@@ -337,12 +407,17 @@ class RoutingProblem:
         of the Binary Linear Equality Constrained (BLEC) problem
         """
         num_nodes = len(self.Nodes)
+        num_vars = len(self.route_costs)
         blec_cost = numpy.array(self.route_costs)
         # constraints are: visit all nodes (EXCEPT depot) exactly once
-        # route_node_visited is a list of lists essentially giving transpose of
-        # constraint matrix; just get rid of row corresponding to depot
+        # route_node_visited is a list of the nodes each route visits;
+        # use this to construct constraint matrix sparsely,
+        # then get rid of row corresponding to depot
         blec_constraints_rhs = numpy.ones(num_nodes - 1)
-        blec_constraints_matrix = numpy.array(self.route_node_visited).transpose()
+        blec_constraints_matrix = numpy.zeros((num_nodes, num_vars))
+        for j, node_indices in enumerate(self.route_node_visited):
+            col_indices = j*numpy.ones(len(node_indices), dtype=int)
+            blec_constraints_matrix[node_indices, col_indices] = 1
         mask = numpy.ones(num_nodes, dtype=bool)
         mask[self.depotIndex] = False
         blec_constraints_matrix = blec_constraints_matrix[mask, :]

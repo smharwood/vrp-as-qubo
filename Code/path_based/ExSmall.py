@@ -1,11 +1,7 @@
-# -*- coding: utf-8 -*-
 """
-Created on Fri Jun 22 10:05:23 2018
+SM Harwood
+22 June 2018
 
-@author: smharwo
-"""
-
-"""
 Simple example from
 Desrochers, Desrosiers, Solomon, "A new optimization algorithm for the vehicle routing problem with time windows"
 to test stuff
@@ -15,8 +11,9 @@ import path_based.RoutingProblem as rp
 def DefineProblem():
     prob = rp.RoutingProblem()
 
-    # Set vehicle capacity
+    # Set vehicle capacity + initial loading of vehicle when it leaves depot
     prob.setVehicleCap(6)
+    prob.setInitialLoading(6)
 
     # Add nodes (Name, Demand, Time Window)
     prob.addNode('D',0)
@@ -44,7 +41,7 @@ def DefineProblem():
 
     # Add/check routes
     # From paper, we know there are 11
-    R = [None]*12
+    R = [None]*13
     R[0] = ['D','1','D']
     R[1] = ['D','2','D']
     R[2] = ['D','3','D']
@@ -57,9 +54,10 @@ def DefineProblem():
     R[9] = ['D','2','1','3','D']
     R[10]= ['D','2','3','1','D']
     R[11]= ['D','2','3','1','3','D'] # infeasible to test
+    R[12]= ['D'] # is this feasible? no
 
     for route in R:
-        f,_ = prob.addRoute(route)
+        f, _ = prob.addRoute(route)
         if not f:
             print(str(route)+' not feasible')
 

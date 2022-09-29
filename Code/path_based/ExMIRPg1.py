@@ -87,7 +87,7 @@ def add_nodes(problem, name, initial_inv, rate, tankage, size, time_horizon):
         prevVisits+=1
     return node_names
 
-def DefineProblem(TimeHorizon):
+def DefineProblem(TimeHorizon, make_feasible=False):
     """
     Define a specific problem given a time horizon
     """
@@ -185,6 +185,12 @@ def DefineProblem(TimeHorizon):
     #for n in prob.Nodes: print(n)
     add_routes(prob, TimeHorizon, high_cost)
 
+    # No guarantee that the problem is feasible
+    # (although probably is for TimeHorizon <= 200)
+    # if desired, we can modify the problem to ensure that it has a feasible soln
+    if make_feasible:
+        prob.make_feasible(exit_penalty=high_cost, time_penalty=10)
+
     return prob
 
 def add_routes(problem, TimeHorizon, high_cost):
@@ -230,4 +236,13 @@ def test():
     soln = cp.solution.get_values()
     routes = prob.getRoutes(soln)
     print("\nSolution status: "+cp.solution.get_status_string())
+    return
+
+def test_feas():
+    prob = DefineProblem(300)
+    fs = prob.feasible_solution
+    A_eq, b_eq, Q_eq, r_eq = prob.getConstraintData()
+    res = A_eq.dot(fs) - b_eq
+    print("residual: {}".format(res))
+    assert np.isclose(np.linalg.norm(res), 0), "Feasible solution is not feasible"
     return
