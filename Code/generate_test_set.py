@@ -30,7 +30,7 @@ def gen(prefix, horizons):
         name = ''.join([w[0] for w in mod.split('_')])
 
         # define problem and export it
-        prob = ex.DefineProblem(TH)
+        prob = ex.DefineProblem(TH, make_feasible=True)
         
         # Version with objective:
         Q, c = prob.getQUBO(None, feasibility=False)

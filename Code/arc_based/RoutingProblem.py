@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
 """
-Created on 19 December 2019
-
-@author: stuart.m.harwood@exxonmobil.com
+SM Harwood
+19 December 2019
 
 Container for a arc-based formulation of a 
 Vehicle Routing Problem with Time Windows
@@ -71,6 +69,9 @@ class RoutingProblem:
         Add a potentially allowable arc;
         we also check feasibility of TIMING:
             allow if origin TimeWindow start plus travel time < destination TimeWindow end
+
+        Return:
+            added (bool): whether arc was added or not
         """
         i = self.getNodeIndex(OName)
         j = self.getNodeIndex(DName)
@@ -78,7 +79,9 @@ class RoutingProblem:
         # Add arc if timing works:
         if departure_time + time <= self.Nodes[j].getWindow()[1]:
             self.Arcs[(i,j)] = Arc(self.Nodes[i],self.Nodes[j],time,cost)
-        return
+            return True
+        else:
+            return False
 
     def checkArc(self,arcKey):
         """ Is the arc valid? """
@@ -384,6 +387,148 @@ class RoutingProblem:
         self.blec_constraints_matrix = sparse.coo_matrix((aval,(arow,acol)))
         self.blec_constraints_rhs = numpy.array(brhs)
         self.constraints_built = True
+        return
+
+    def estimate_max_vehicles(self):
+        """ Estimate maximum number of vehicles based on degree of depot node in graph """
+        num_outgoing = 0
+        num_incoming = 0
+        # recall: depot is index 0
+        for arc in self.Arcs.keys():
+            if arc[0] == 0:
+                num_outgoing += 1
+            if arc[1] == 0:
+                num_incoming += 1
+        return min(num_outgoing, num_incoming)
+
+    def get_arrival_time(self, time, arc):
+        """ Get actual arrival time, leaving at <time> on <arc>
+        
+        Return:
+            arrival_time (float): Arrival time
+            in_TimePoints (bool): whether this arrival time is in TimePoints set
+        """
+        # Recall: cannot arrive before time window
+        TW = self.Arcs[arc].getD().getWindow()
+        arrival = max(TW[0], time + self.Arcs[arc].getTravelTime())
+        greater_TimePoints = (self.TimePoints >= arrival)
+        if not any(greater_TimePoints):
+            return arrival, False
+        arr = numpy.argmax(greater_TimePoints)
+        arrival_actual = self.TimePoints[arr]
+        return arrival_actual, True
+
+    def make_feasible(self, high_cost):
+        """
+        Some sort of greedy construction heuristic to make sure the problem is 
+        feasible. We add dummy node/arcs as necessary to emulate more
+        vehicles being available.
+        """
+        # Initialize list of unvisited node indices
+        # remove depot
+        unvisited_indices = list(range(len(self.Nodes)))
+        unvisited_indices.remove(0)
+
+        # starting from depot,
+        # go through unvisited nodes, 
+        # greedily visit first unvisited node that we can (satisfying timing constraints)
+        # repeat until outgoing arcs from depot are exhausted
+        used_arcs = []
+        max_vehicles = self.estimate_max_vehicles()
+        for _ in range(max_vehicles):
+            # start from depot, build a route
+            current_node = 0 # depot is first node
+            current_time = self.TimePoints[0]
+            building_route = True
+            while building_route:
+                # go through unvisited nodes, choose first available
+                best_node = None
+                best_arrival = numpy.inf
+                for n in unvisited_indices:
+                    arc = (current_node, n)
+                    if self.checkArc(arc):
+                        # this is a potentially allowed arc- need to check timing
+                        TW = self.Nodes[n].getWindow()
+                        arrival_actual, inTP = self.get_arrival_time(current_time, arc)
+                        if not inTP:
+                            # arrival time is beyond current TimePoints
+                            continue
+                        if arrival_actual <= min(TW[1], best_arrival):
+                            # this timing is valid AND we arrive earlier than all others yet
+                            best_node = n
+                            best_arrival = arrival_actual
+                if best_node is not None:
+                    # record arc used, update position + time
+                    used_arcs.append((current_node,current_time, best_node,best_arrival))
+                    current_node = best_node
+                    current_time = best_arrival
+                    unvisited_indices.remove(best_node)
+                else:
+                    # route cannot be continued; exit to depot
+                    # create arc if necessary (indicator of malspecified problem)
+                    building_route = False
+                    arc = (current_node, 0)
+                    self.check_and_add_exit_arc(current_node)
+                    # Make sure that we can get back to depot with the discrete
+                    # time points available
+                    arrival_actual, inTP = self.get_arrival_time(current_time, arc)
+                    if not inTP:
+                        # if arrival time is not in TimePoints, add it in
+                        self.TimePoints = numpy.append(self.TimePoints, arrival_actual)
+                    used_arcs.append((current_node,current_time, 0,arrival_actual))
+            # end building route
+        # end construction over all routes
+
+        # NOW, if there are unvisited nodes, construct expensive dummy arcs from depot
+        # and record these dummy routes
+        for n in unvisited_indices:
+            # Since we are adding arcs, we need to re-construct/enumerate stuff
+            self.variablesEnumerated = False
+            self.constraints_built = False
+            self.objective_built = False
+
+            arc = (0, n)
+            depot_nm = self.NodeNames[0]
+            node_nm = self.NodeNames[n]
+            assert not self.checkArc(arc), \
+                "We should have been able to construct a route through node {}".format(node_nm)
+            print("Adding exit arc from {}".format(node_nm))
+            added = self.addArc(depot_nm, node_nm, 0, high_cost)
+            assert added, "Something is wrong in construction heuristic"
+            current_time = self.TimePoints[0]
+            arrival, inTP = self.get_arrival_time(current_time, arc)
+            # Since the arc we added has zero travel time, 
+            # arrival time should be in TimePoints already...
+            assert inTP, "Arriving at {}: not in TimePoints??".format(arrival)
+            used_arcs.append((0, current_time, n, arrival))
+            current_time = arrival
+
+            # Now, exit back to depot
+            self.check_and_add_exit_arc(n, high_cost)
+            arc = (n, 0)
+            arrival, inTP = self.get_arrival_time(current_time, arc)
+            assert inTP, "Arriving at {}: not in TimePoints??".format(arrival)
+            used_arcs.append((n, current_time, 0, arrival))
+        # done fixing??
+
+        # now construct feasible solution
+        self.enumerateVariables()
+        self.feasible_solution = numpy.zeros(self.NumVariables)
+        for a in used_arcs:
+            self.feasible_solution[self.getVarIndex(*a)] = 1
+        return
+
+    def check_and_add_exit_arc(self, node_index, cost=0):
+        """ If exit arc from Nodes[node_index] to depot does not exist,
+        add it with zero travel time BUT cost of cost
+        """
+        arc = (node_index, 0)
+        if not self.checkArc(arc):
+            node_nm = self.NodeNames[node_index]
+            depot_nm = self.NodeNames[0]
+            print("Adding exit arc from {}".format(node_nm))
+            added = self.addArc(node_nm, depot_nm, 0, cost)
+            assert added, "Something is wrong with exit arcs: {} not added".format(arc)
         return
 
     def getRoutes(self, solution):

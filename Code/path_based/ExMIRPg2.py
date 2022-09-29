@@ -1,10 +1,7 @@
-# -*- coding: utf-8 -*-
 """
-Created on Tue Jun 26 13:38:19 2018
+SM Harwood
+26 June 2018
 
-@author: stuart.m.harwood@exxonmobil.com
-"""
-"""
 Adapting something that looks like a MIRPLib instance to fit the VRPTW formalism
 Specifically, looking at LR1_DR02_VC01_V6a from
 https://mirplib.scl.gatech.edu/sites/default/files/LR1_DR02_VC01_V6a.txt
@@ -167,4 +164,6 @@ def DefineProblem(TimeHorizon):
     for d in DemandLists[1]:
         prob.addArc(d,'Depot', 0, (TimeHorizon/6.0)*1500)
 
+    # TO MAKE THIS COMPLETE WE NEED TO ADD ROUTES
+    # see ExMIRPg1
     return prob

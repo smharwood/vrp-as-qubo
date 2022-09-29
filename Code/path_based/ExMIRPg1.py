@@ -239,10 +239,14 @@ def test():
     return
 
 def test_feas():
-    prob = DefineProblem(300)
+    prob = DefineProblem(300, make_feasible=True)
     fs = prob.feasible_solution
     A_eq, b_eq, Q_eq, r_eq = prob.getConstraintData()
     res = A_eq.dot(fs) - b_eq
     print("residual: {}".format(res))
     assert np.isclose(np.linalg.norm(res), 0), "Feasible solution is not feasible"
     return
+
+if __name__ == "__main__":
+    # test()
+    test_feas()

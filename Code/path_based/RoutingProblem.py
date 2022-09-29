@@ -383,10 +383,14 @@ class RoutingProblem:
             self.addNode(new_node, -new_node_loading)
             new_node_index = self.NodeNames.index(new_node)
             # Add arcs and route through unvisited node
-            # cost of route will be twice high_cost
-            self.addArc(depot_name, new_node, 0, 0)
+            # cost of route will be (at least?) twice high_cost
+            self.addArc(depot_name, new_node, 0, high_cost)
             self.addArc(new_node, self.NodeNames[u], 0, high_cost)
-            self.addArc(self.NodeNames[u], depot_name, 0, high_cost)
+            # do we need an arc from the unvisited node?
+            try:
+                self.Arcs[(u, self.depotIndex)]
+            except:
+                self.addArc(self.NodeNames[u], depot_name, 0, 0)
             r = [self.depotIndex, new_node_index, u, self.depotIndex]
             routes.append(r)
             feas, _ = self.addRoute(r)

@@ -88,7 +88,7 @@ def add_nodes(problem, name, initial_inv, rate, tankage, size, time_horizon):
         prevVisits+=1
     return node_names
 
-def DefineProblem(TimeHorizon):
+def DefineProblem(TimeHorizon, make_feasible=False):
     """
     Define a specific problem given a time horizon
     """

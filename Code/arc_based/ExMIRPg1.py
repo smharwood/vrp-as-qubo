@@ -84,7 +84,7 @@ def add_nodes(problem, name, initial_inv, rate, tankage, size, time_horizon):
         prevVisits+=1
     return node_names
 
-def DefineProblem(TimeHorizon):
+def DefineProblem(TimeHorizon, make_feasible=False):
     """
     Define a specific problem given a time horizon
     """
@@ -177,6 +177,16 @@ def DefineProblem(TimeHorizon):
         for node in port:
             prob.addArc(node, 'Depot', 0, 0)
 
+    # No guarantee that the problem is feasible
+    # (although probably is for TimeHorizon <= 200)
+    # if desired, we can modify the problem to ensure that it has a feasible soln
+    if make_feasible:
+        # high_cost should be approx as expensive as a "full" route
+        # (a route that does not exit early - continues for full time horizon)
+        # For this problem, S1 must be visited every 6 days- indicates how expensive a full route is
+        high_cost = (TimeHorizon/6.0)*1500
+        prob.make_feasible(high_cost)
+
     return prob
 
 def getQUBO(TimeHorizon, feasibility=False):
@@ -212,6 +222,15 @@ def test():
         print()
     return
 
+def test_feas():
+    prob = DefineProblem(400, make_feasible=True)
+    fs = prob.feasible_solution
+    A_eq, b_eq, Q_eq, r_eq = prob.getConstraintData()
+    res = A_eq.dot(fs) - b_eq
+    print("residual: {}".format(res))
+    assert np.isclose(np.linalg.norm(res), 0), "Feasible solution is not feasible"
+    return
 
 if __name__ == "__main__":
-    test()
+    # test()
+    test_feas()
