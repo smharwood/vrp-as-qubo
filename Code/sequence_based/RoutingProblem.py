@@ -1,13 +1,13 @@
-# -*- coding: utf-8 -*-
 """
 Created on 6 December 2019
 
 @author: stuart.m.harwood@exxonmobil.com
 
-Container for a sequence-based formulation of a 
+Container for a sequence-based formulation of a
 Vehicle Routing Problem with Time Windows
 """
-import numpy, time
+import time
+import numpy
 import scipy.sparse as sparse
 from itertools import product
 try:
@@ -19,20 +19,25 @@ class RoutingProblem:
     """
     Vehicle Routing Problem with Time Windows (VRPTW)
     as a sequence-based formulation
-    becomes a Binary Polynomial Equality-Constrained (BPEC) 
+    becomes a Binary Polynomial Equality-Constrained (BPEC)
     optimization problem
     which can be transformed to a
     Quadratic Unconstrained Binary Optimization (QUBO) problem
     """
+    # pylint: disable=too-many-instance-attributes
 
     def __init__(self, relaxed=False):
         # basic data
-        self.relaxed = relaxed    # Allow slightly less physical arcs, to potentially get feasible formulation
-        self.maxSequenceLength=0  # maximum length of a sequence/number of positions to consider
-        self.maxVehicles=0        # maximum number of vehicles to consider
+        # Allow slightly less physical arcs, to potentially get feasible formulation
+        self.relaxed = relaxed
+        # maximum length of a sequence/number of positions to consider
+        self.maxSequenceLength=0
+        # maximum number of vehicles to consider
+        self.maxVehicles=0
         self.Nodes = []
         self.NodeNames = []
         self.Arcs = dict()
+        self.vehicle_cost = []
         self.NumVariables = 0
         self.VarMapping = []
         self.fixedValues = dict()
@@ -51,14 +56,18 @@ class RoutingProblem:
 
     def setMaxSequenceLength(self, maxSequenceLength):
         self.maxSequenceLength = int(maxSequenceLength)
+        return
 
-    def setMaxVehicles(self, maxVehicles):
-        self.maxVehicles = maxVehicles
+    def setMaxVehicles(self, max_vehicles):
+        self.maxVehicles = max_vehicles
+        self.vehicle_cost = [0]*max_vehicles
+        return
 
     def addNode(self,NodeName,TW):
         assert NodeName not in self.NodeNames, NodeName + ' is already in Node List'
         self.Nodes.append(Node(NodeName,TW))
         self.NodeNames.append(NodeName)
+        return
 
     def addDepot(self,DepotName,TW):
         """Insert depot at first position of nodes"""
@@ -70,9 +79,9 @@ class RoutingProblem:
                 self.NodeNames.insert(0,DepotName)
             else:
                 print("Depot already added")
-        except(IndexError):
+        except IndexError:
             self.addNode(DepotName, TW)
-        # Since we treat the depot as absorbing 
+        # Since we treat the depot as absorbing
         # (see build_bpec_quadratic_constraints)
         # We should allow Depot - Depot moves
         self.Arcs[(0,0)] = Arc(self.Nodes[0],self.Nodes[0],0,0)
@@ -93,7 +102,7 @@ class RoutingProblem:
         Else (Origin != Depot):
             allow if origin TimeWindow END   plus travel time < destination TimeWindow end
 
-        Note that this is a conservative way to enforce timing (unless relaxed); 
+        Note that this is a conservative way to enforce timing (unless relaxed);
         this formulation cannot enforce it much more finely
         """
         i = self.getNodeIndex(OName)
@@ -108,20 +117,27 @@ class RoutingProblem:
             self.Arcs[(i,j)] = Arc(self.Nodes[i],self.Nodes[j],time,cost)
         return
 
-    def checkArc(self,arcKey):
+    def checkArc(self, arc_key):
         """ Is the arc valid? """
-        try :
-            self.Arcs[arcKey]
-            return True
-        except(KeyError) :
-            return False
+        return arc_key in self.Arcs
+        # try :
+        #     self.Arcs[arcKey]
+        #     return True
+        # except KeyError:
+        #     return False
 
     def enumerateVariables(self):
-        """ Basic operation that needs to be done to keep track of 
+        """ Basic operation that needs to be done to keep track of
             variable counts, indexing """
         if self.variablesEnumerated:
             return
 
+        # "inverse" var map - from tuple index to enumerated index
+        # use -1 to indicate the var is fixed
+        self.VarMapping_inverse = -numpy.ones(
+            (self.maxVehicles, self.maxSequenceLength, len(self.Nodes)),
+            dtype=int
+        )
         start = time.time()
         num_vars = 0
         # Loop over (vehicles, positions/sequence, nodes)
@@ -163,6 +179,7 @@ class RoutingProblem:
                 # At this point, variable (vi,si,ni) is free, record the index
                 for vi in range(self.maxVehicles):
                     self.VarMapping.append((vi,si,ni))
+                    self.VarMapping_inverse[vi,si,ni] = num_vars
                     num_vars += 1
         # end loops
         duration = time.time() - start
@@ -176,22 +193,27 @@ class RoutingProblem:
         """ Number of variables in formulation """
         return self.NumVariables
 
-    def getVarIndex(self, VehicleIndex, SequenceIndex, NodeIndex):
+    def getVarIndex(self, vehicle_index, sequence_index, node_index):
         """Get the unique id/index of the binary variable given the "tuple" indexing
            Return of None means the tuple corresponds to a fixed variable """
-        try:
-            return self.VarMapping.index((VehicleIndex, SequenceIndex, NodeIndex))
-        except(ValueError):
+        index = self.VarMapping_inverse[vehicle_index, sequence_index, node_index]
+        if index < 0:
             return None
+        # else
+        return index
+        # try:
+        #     return self.VarMapping.index((vehicle_index, sequence_index, node_index))
+        # except ValueError:
+        #     return None
 
-    def getVarTupleIndex(self, varIndex):
+    def getVarTupleIndex(self, var_index):
         """Inverse of getVarIndex"""
         try:
-            return self.VarMapping[varIndex]
-        except(IndexError):
+            return self.VarMapping[var_index]
+        except IndexError:
             return None
 
-    def build_bpec_obj(self): 
+    def build_bpec_obj(self):
         """
         Build up objective of base BPEC formulation:
 
@@ -223,7 +245,7 @@ class RoutingProblem:
                     linear_bool   = ((var_index_1 is None) !=  (var_index_2 is None)) # exclusive or
                     quad_bool = not ((var_index_1 is None) or  (var_index_2 is None))
 
-                    coeff = self.Arcs[key].getCost()
+                    coeff = self.Arcs[key].getCost() + self.vehicle_cost[vi]
                     if constant_bool:
                         constant = self.fixedValues[(vi,si,ni)]*self.fixedValues[(vi,si+1,nj)]
                         if constant != 0:
@@ -254,133 +276,91 @@ class RoutingProblem:
         if self.quad_con_built: return
         self.enumerateVariables()
 
-        # Certain arcs are not allowed, either because they were not added to 
-        # the problem (enforcing, perhaps, certain sequencing constraints) or
-        # because there is no way you could satisfy the time window requirement
-        # given the travel time of the arc, or because we must be absorbed by 
-        # the depot if we have returned to it.
+        # Certain arcs cannot be used.
         # These arcs must be penalized in the objective.
         # Keep track with bpec_edgepenalty_bilinear
 
         start = time.time()
         # for bilinear constraint/penalty terms
-        pqval = []
         pqrow = []
         pqcol = []
 
-        # # x_{vi,si,ni} * x_{vi,si+1,nj} = 0, \forall vi,si,(ni,nj) \notin Arcs
-        # # OR
-        # # x_{vi,si,d}  * x_{vi,si+1,nj} = 0, \forall vi,si>=1, nj \neq d
-        # for si in range(self.maxSequenceLength-1):
-        #     for ni, nj in product(range(len(self.Nodes)),range(len(self.Nodes))):
-        #         key = (ni,nj)
-        #         # Do we need this constraint?
-        #         # Either its not a valid arc, or
-        #         # we need to be absorbed by the depot:
-        #         # if we are in the depot for any sequence position >= 1,
-        #         # we CANNOT move anywhere besides depot
-        #         need_constraint = (not self.checkArc(key)) or \
-        #                             (si >= 1 and ni == 0 and nj != 0)
-        #         if not need_constraint:
-        #             #print("{},{},{} to {},{},{} ALLOWED".format(vi,si,ni, vi,si+1,nj))
-        #             continue
-                
-        #         for vi in range(self.maxVehicles):
-        #             var_index_1 = self.getVarIndex(vi,si,ni)
-        #             var_index_2 = self.getVarIndex(vi,si+1,nj)
-
-        #             # if one or both variables fixed, check consistency
-        #             # if no variable is fixed, this goes to quadratic constraints
-        #             constant_bool = ((var_index_1 is None) and (var_index_2 is None))
-        #             linear_bool   = ((var_index_1 is None) !=  (var_index_2 is None)) # exclusive or
-        #             quad_bool = not ((var_index_1 is None) or  (var_index_2 is None))
-
-        #             if constant_bool:
-        #                 # constraint is x_i * x_j = 0
-        #                 fixed_val = self.fixedValues[(vi,si,ni)]* \
-        #                             self.fixedValues[(vi,si+1,nj)]
-        #                 assert numpy.isclose(fixed_val, 0.0), "Quadratic constraint not consistent"
-        #             if linear_bool:
-        #                 # constraint is x_i * x_j = 0
-        #                 # If only one value is fixed, it must be zero,
-        #                 # otherwise we have missed a chance to fix a variable
-        #                 fixed_val = 0.0                            
-        #                 if var_index_1 is None:
-        #                     fixed_val += self.fixedValues[(vi,si,ni)]
-        #                     missed_var_index = (vi,si+1,nj)
-        #                 if var_index_2 is None:
-        #                     fixed_val += self.fixedValues[(vi,si+1,nj)]
-        #                     missed_var_index = (vi,si,ni)
-        #                 assert numpy.isclose(fixed_val, 0.0), \
-        #                     "Missed chance to fix variable {}".format(missed_var_index)
-        #             if quad_bool:
-        #                 # either invalid arc or enforcing depot absorption
-        #                 pqrow.append(var_index_1)
-        #                 pqcol.append(var_index_2)
-        #                 pqval.append(1.0)
-
-        # Constraints:
+        # Constraint: Only use allowed arcs
         # x_{vi,si,ni} * x_{vi,si+1,nj} = 0, \forall vi,si,(ni,nj) \notin Arcs
         for ni, nj in product(range(len(self.Nodes)),range(len(self.Nodes))):
-            key = (ni,nj)
             # If this is a valid arc, then there is no constraint
-            if self.checkArc(key): continue
+            if self.checkArc((ni,nj)):
+                continue
             for si in range(self.maxSequenceLength-1):
                 for vi in range(self.maxVehicles):
-                    pqrow, pqcol, pqval = self.quadratic_constraint_logic(vi, si, ni, nj, pqrow, pqcol, pqval)
-        # end loop over node pairs
+                    pqrow, pqcol = self.quadratic_constraint_logic(
+                        vi, si, ni, nj, pqrow, pqcol
+                    )
 
-        # Constraints:
-        # x_{vi,si,d}  * x_{vi,si+1,nj} = 0, \forall vi,si>=1, nj \neq d
-        for vi in range(self.maxVehicles):
+        # Constraint: Once a vehicle returns to depot, it remains there
+        # x_{vi,si,d}  * x_{vi,si+1,nj} = 0, \forall vi, si >= 1, nj \neq d
+        for nj in range(1,len(self.Nodes)):
+            # If this is not a valid arc, then we already added this constraint above
+            if not self.checkArc((0,nj)):
+                continue
             for si in range(1,self.maxSequenceLength-1):
-                for nj in range(1,len(self.Nodes)):
-                    # If this is not a valid arc, then we already added this constraint above
-                    if not self.checkArc((0,nj)): continue
-                    pqrow, pqcol, pqval = self.quadratic_constraint_logic(vi, si, 0, nj, pqrow, pqcol, pqval)
-        
+                for vi in range(self.maxVehicles):
+                    pqrow, pqcol = self.quadratic_constraint_logic(
+                        vi, si, 0, nj, pqrow, pqcol
+                    )
+
         # construct sparse matrix for bilinear terms
-        M = self.getNumVariables()
-        self.bpec_edgepenalty_bilinear = sparse.coo_matrix((pqval,(pqrow,pqcol)), shape=(M,M))
+        n_var = self.getNumVariables()
+        pqval = numpy.ones(len(pqrow))
+        self.bpec_edgepenalty_bilinear = sparse.coo_matrix((pqval,(pqrow,pqcol)),
+            shape=(n_var,n_var)
+        )
         self.quad_con_built = True
         duration = time.time() - start
         print("Quadratic constraints built in {} seconds".format(duration))
         return
 
-    def quadratic_constraint_logic(self, vi, si, ni, nj, pqrow, pqcol, pqval):
+    def quadratic_constraint_logic(self, vi, si, ni, nj, pqrow, pqcol):
+        """
+        Consistently check the quadratic constraints and update sparse
+        representation of the matrix
+        """
         var_index_1 = self.getVarIndex(vi,si,ni)
         var_index_2 = self.getVarIndex(vi,si+1,nj)
 
-        # if one or both variables fixed, check consistency
-        # if no variable is fixed, this goes to quadratic constraints
-        constant_bool = ((var_index_1 is None) and (var_index_2 is None))
-        linear_bool   = ((var_index_1 is None) !=  (var_index_2 is None)) # exclusive or
-        quad_bool = not ((var_index_1 is None) or  (var_index_2 is None))
+        # # if one or both variables fixed, check consistency
+        # # if no variable is fixed, this goes to quadratic constraints
+        # constant_bool = ((var_index_1 is None) and (var_index_2 is None))
+        # linear_bool   = ((var_index_1 is None) !=  (var_index_2 is None)) # exclusive or
+        # quad_bool = not ((var_index_1 is None) or  (var_index_2 is None))
 
-        if constant_bool:
+        # BOTH VARS FIXED
+        if (var_index_1 is None) and (var_index_2 is None):
             # constraint is x_i * x_j = 0
             fixed_val = self.fixedValues[(vi,si,ni)]* \
                         self.fixedValues[(vi,si+1,nj)]
-            assert numpy.isclose(fixed_val, 0.0), "Quadratic constraint not consistent"
-        if linear_bool:
+            assert numpy.isclose(fixed_val, 0.0), \
+                "Quadratic constraint not consistent"
+        # ONE AND ONLY ONE VAR FIXED (exclusive or)
+        elif (var_index_1 is None) != (var_index_2 is None):
             # constraint is x_i * x_j = 0
             # If only one value is fixed, it must be zero,
             # otherwise we have missed a chance to fix a variable
-            fixed_val = 0.0                            
             if var_index_1 is None:
-                fixed_val += self.fixedValues[(vi,si,ni)]
+                fixed_val = self.fixedValues[(vi,si,ni)]
                 missed_var_index = (vi,si+1,nj)
-            if var_index_2 is None:
-                fixed_val += self.fixedValues[(vi,si+1,nj)]
+            else:
+                fixed_val = self.fixedValues[(vi,si+1,nj)]
                 missed_var_index = (vi,si,ni)
             assert numpy.isclose(fixed_val, 0.0), \
-                "Missed chance to fix variable {}".format(missed_var_index)
-        if quad_bool:
-            # either invalid arc or enforcing depot absorption
+                f"Missed chance to fix variable {missed_var_index}"
+        # NEITHER VAR FIXED
+        else:
+            # Either invalid arc or enforcing depot absorption
+            # Update quadratic constraint/penalty
             pqrow.append(var_index_1)
             pqcol.append(var_index_2)
-            pqval.append(1.0)
-        return pqrow, pqcol, pqval
+        return pqrow, pqcol
 
     def build_bpec_constraints(self):
         """
@@ -447,6 +427,91 @@ class RoutingProblem:
         print("Linear constraints built in {} seconds".format(duration))
         return
 
+    def make_feasible(self, high_cost):
+        """
+        Some sort of greedy construction heuristic to make sure the problem is
+        feasible. We add dummy nodes/arcs as necessary to emulate more
+        vehicles being available.
+        """
+        # Initialize list of unvisited node indices
+        # remove depot
+        # then sort based on time window end - useful later
+        unvisited_indices = list(range(len(self.Nodes)))
+        unvisited_indices.remove(0)
+        unvisited_indices.sort(key=lambda n: self.Nodes[n].getWindow()[1])
+
+        depot_nm = self.NodeNames[0]
+        used_sequences = []
+        for vi in range(self.maxVehicles):
+            # We always start and end in depot; the corresponding variables are fixed
+            current_node = 0
+            for si in range(1,self.maxSequenceLength-1):
+                # Although timing is less important in this formulation,
+                # we still choose the next node based on the earliest next departure time,
+                # as this will be a proxy for how much flexibility/ how many more
+                # nodes we can visit on this route
+                no_next_node = True
+                for ni in unvisited_indices:
+                    arc = (current_node, ni)
+                    if self.checkArc(arc):
+                        # unvisited_indices is sorted, so the first node to which
+                        # we have a valid arc is the node with best timing
+                        used_sequences.append((vi, si, ni))
+                        unvisited_indices.remove(ni)
+                        current_node = ni
+                        no_next_node = False
+                        break
+                if no_next_node:
+                    # We can't go to any unvisited nodes
+                    # finish out the route at the depot
+                    arc = (current_node, 0)
+                    if not self.checkArc(arc):
+                        node_nm = self.NodeNames[current_node]
+                        self.addArc(node_nm, depot_nm, 0, 0)
+                        print(f"Adding arc {node_nm} -- {depot_nm}")
+                    for sii in range(si, self.maxSequenceLength-1):
+                        used_sequences.append((vi, sii, 0))
+                    break
+            # end sequence loop
+        # end vehicle loop
+
+        for ni in unvisited_indices:
+            # We are changing data - variables counts will change
+            self.variablesEnumerated = False
+            self.objective_built = False
+            self.lin_con_built = False
+            self.quad_con_built = False
+
+            # add a vehicle and entry arc from depot
+            # Arcs from the depot could be "available"
+            # So add a cost for this dummy *vehicle*
+            vi = self.maxVehicles
+            self.maxVehicles += 1
+            self.vehicle_cost.append(high_cost)
+            print(f"Adding vehicle {vi} with cost {high_cost}")
+            arc = (0, ni)
+            node_nm = self.NodeNames[ni]
+            # check and add entry arc
+            if not self.checkArc((0, ni)):
+                self.addArc(depot_nm, node_nm, 0, high_cost)
+                print(f"Adding arc {depot_nm} -- {node_nm}")
+            used_sequences.append((vi, 1, ni))
+            # check and add exit arc
+            if not self.checkArc((ni, 0)):
+                self.addArc(node_nm, depot_nm, 0, high_cost)
+                print(f"Adding arc {node_nm} -- {depot_nm}")
+            # finish out sequence at depot
+            for si in range(2, self.maxSequenceLength-1):
+                used_sequences.append((vi, si, 0))
+        # end modifying problem to make feasible
+
+        # construct and save feasible solution
+        self.enumerateVariables()
+        self.feasible_solution = numpy.zeros(self.NumVariables)
+        for seq in used_sequences:
+            self.feasible_solution[self.getVarIndex(*seq)] = 1
+        return
+
     def getCplexProb(self):
         """
         Get a CPLEX object containing the BLEC/MIP representation
@@ -470,8 +535,11 @@ class RoutingProblem:
         rows = self.bpec_constraints_matrix.row.tolist()
         cols = self.bpec_constraints_matrix.col.tolist()
         vals = self.bpec_constraints_matrix.data.tolist()
-        cplex_prob.linear_constraints.add(rhs=self.bpec_constraints_rhs.tolist(), senses=lcon_types, 
-            names=self.lin_con_names)
+        cplex_prob.linear_constraints.add(
+            rhs=self.bpec_constraints_rhs.tolist(),
+            senses=lcon_types, 
+            names=self.lin_con_names
+        )
         cplex_prob.linear_constraints.set_coefficients(zip(rows, cols, vals))
 
         # Bilinear constraints: LINEARIZE
@@ -482,7 +550,7 @@ class RoutingProblem:
         cols = self.bpec_edgepenalty_bilinear.col
         vals = self.bpec_edgepenalty_bilinear.data
         assert (vals == 1.0).all(), "Linearization plan not gonna work"
-        linearized = [cplex.SparsePair(ind = [int(r), int(c)], val = [1.0, 1.0]) 
+        linearized = [cplex.SparsePair(ind = [int(r), int(c)], val = [1.0, 1.0])
             for r,c in zip(rows, cols)]
         names = ["c_linearized_{}_{}".format(r, c) for r,c in zip(rows, cols)]
         num_to_add = len(linearized)
@@ -606,7 +674,9 @@ class RoutingProblem:
                 qval.append(val)
 
         # Quadratic edge penalty terms:
-        for (r,c,val) in zip(self.bpec_edgepenalty_bilinear.row,self.bpec_edgepenalty_bilinear.col,self.bpec_edgepenalty_bilinear.data):
+        for (r,c,val) in zip(self.bpec_edgepenalty_bilinear.row,
+                             self.bpec_edgepenalty_bilinear.col,
+                             self.bpec_edgepenalty_bilinear.data):
             qrow.append(r)
             qcol.append(c)
             qval.append(penalty_parameter*val)
@@ -615,7 +685,7 @@ class RoutingProblem:
         # rho*||Ax - b||^2 = rho*( x^T (A^T A) x - 2b^T A x + b^T b )
 
         # Put -2b^T A on the diagonal:
-        TwoBTA = -2*self.bpec_constraints_matrix.transpose().dot(self.bpec_constraints_rhs)     
+        TwoBTA = -2*self.bpec_constraints_matrix.transpose().dot(self.bpec_constraints_rhs)
         for i in range(self.getNumVariables()):
             if TwoBTA[i] != 0:
                 qrow.append(i)
@@ -637,7 +707,7 @@ class RoutingProblem:
         """
         Get a representation of the paths/ vehicle routes in a solution
         
-        solution: binary vector corresponding to a solution       
+        solution: binary vector corresponding to a solution
         """
         soln_var_indices = numpy.flatnonzero(solution)
         if soln_var_indices.size == 0:
@@ -705,7 +775,9 @@ class RoutingProblem:
     def print_edge_penalty(self):
         """Just display the sparse matrix encoding the edge penalty bi/linear terms in a nice way"""
         print("Quadratic Edge Penalty terms:")
-        for (r,c,val) in zip(self.bpec_edgepenalty_bilinear.row,self.bpec_edgepenalty_bilinear.col,self.bpec_edgepenalty_bilinear.data):
+        for (r,c,val) in zip(self.bpec_edgepenalty_bilinear.row,
+                             self.bpec_edgepenalty_bilinear.col,
+                             self.bpec_edgepenalty_bilinear.data):
             (vi,si,ni) = self.getVarTupleIndex(r)            
             (vj,sj,nj) = self.getVarTupleIndex(c)
             print("(v{}, s{}, {}) -- (v{}, s{}, {}) : (not allowed)".format(
@@ -722,8 +794,7 @@ class RoutingProblem:
             (vj,sj,nj) = self.getVarTupleIndex(c)
             print("(v{}, s{}, {}) -- (v{}, s{}, {}) : {}".format(
                     vi,si,self.NodeNames[ni], vj,sj,self.NodeNames[nj], val))
-        
-               
+
 
 class Node:
     """

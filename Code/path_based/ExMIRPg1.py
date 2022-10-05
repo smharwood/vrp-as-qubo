@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Created on 18 June 2020
 
@@ -189,7 +188,7 @@ def DefineProblem(TimeHorizon, make_feasible=False):
     # (although probably is for TimeHorizon <= 200)
     # if desired, we can modify the problem to ensure that it has a feasible soln
     if make_feasible:
-        prob.make_feasible(exit_penalty=high_cost, time_penalty=10)
+        prob.make_feasible(high_cost)
 
     return prob
 

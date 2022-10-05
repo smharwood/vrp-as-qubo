@@ -421,7 +421,7 @@ class RoutingProblem:
     def make_feasible(self, high_cost):
         """
         Some sort of greedy construction heuristic to make sure the problem is 
-        feasible. We add dummy node/arcs as necessary to emulate more
+        feasible. We add dummy nodes/arcs as necessary to emulate more
         vehicles being available.
         """
         # Initialize list of unvisited node indices
@@ -492,7 +492,7 @@ class RoutingProblem:
             node_nm = self.NodeNames[n]
             assert not self.checkArc(arc), \
                 "We should have been able to construct a route through node {}".format(node_nm)
-            print("Adding exit arc from {}".format(node_nm))
+            print("Adding entry arc to {}".format(node_nm))
             added = self.addArc(depot_nm, node_nm, 0, high_cost)
             assert added, "Something is wrong in construction heuristic"
             current_time = self.TimePoints[0]
@@ -509,9 +509,9 @@ class RoutingProblem:
             arrival, inTP = self.get_arrival_time(current_time, arc)
             assert inTP, "Arriving at {}: not in TimePoints??".format(arrival)
             used_arcs.append((n, current_time, 0, arrival))
-        # done fixing??
+        # done fixing
 
-        # now construct feasible solution
+        # construct and save feasible solution
         self.enumerateVariables()
         self.feasible_solution = numpy.zeros(self.NumVariables)
         for a in used_arcs:
@@ -529,6 +529,10 @@ class RoutingProblem:
             print("Adding exit arc from {}".format(node_nm))
             added = self.addArc(node_nm, depot_nm, 0, cost)
             assert added, "Something is wrong with exit arcs: {} not added".format(arc)
+            # Since we are adding arcs, we need to re-construct/enumerate stuff
+            self.variablesEnumerated = False
+            self.constraints_built = False
+            self.objective_built = False
         return
 
     def getRoutes(self, solution):

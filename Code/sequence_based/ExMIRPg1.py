@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Created on 18 June 2020
 
@@ -9,13 +8,13 @@ https://mirplib.scl.gatech.edu/sites/default/files/LR1_2_DR1_3_VC2_V6a.txt
 
 Some modifications
 """
-import numpy as np
 from itertools import product
+import numpy as np
 import sequence_based.RoutingProblem as rp
 
 
-def time_window(prevVisits, initial_inv, rate, tankage, size):
-    """ 
+def time_window(prev_visits, initial_inv, rate, tankage, size):
+    """
     Determine the time window of this node. A single physical port must be visited multiple times
     as it runs out of inventory or fills up its storage capacity. The time window in which it must
     be visited depends on the number of times it has previously been visited
@@ -36,24 +35,24 @@ def time_window(prevVisits, initial_inv, rate, tankage, size):
     if rate > 0:
         # SUPPLY
         # Earliest a ship can load a full shipload:
-        # inventory(t) - (prevVisits+1)*size >= 0     
-        tw0 = ((prevVisits+1)*size - initial_inv)/rate
+        # inventory(t) - (prev_visits+1)*size >= 0     
+        tw0 = ((prev_visits+1)*size - initial_inv)/rate
         # latest a ship can arrive before port capacity is exceeded:
-        # inventory(t) - (prevVisits)*size > tankage                
-        tw1 = (tankage + (prevVisits)*size - initial_inv)/rate
+        # inventory(t) - (prev_visits)*size > tankage                
+        tw1 = (tankage + (prev_visits)*size - initial_inv)/rate
         return (tw0, tw1)
     else:
         # DEMAND
         # Earliest a ship can discharge a full load into inventory:
-        # inventory(t) + (prevVisits+1)*size <= tankage
-        tw0 = (tankage - (prevVisits+1)*size - initial_inv)/rate
+        # inventory(t) + (prev_visits+1)*size <= tankage
+        tw0 = (tankage - (prev_visits+1)*size - initial_inv)/rate
         # latest a ship can arrive before port runs out of inventory:
-        # inventory(t) + (prevVisits)*size < 0                
-        tw1 = (-(prevVisits)*size - initial_inv)/rate
+        # inventory(t) + (prev_visits)*size < 0                
+        tw1 = (-(prev_visits)*size - initial_inv)/rate
         return (tw0, tw1)
 
 def add_nodes(problem, name, initial_inv, rate, tankage, size, time_horizon):
-    """ 
+    """
     Add nodes for this supply or demand port. A single physical port must be visited multiple times
     as it runs out of inventory or fills up its storage capacity
 
@@ -76,16 +75,16 @@ def add_nodes(problem, name, initial_inv, rate, tankage, size, time_horizon):
         demand_level = -size
     else:
         demand_level = size
-    prevVisits = 0
+    prev_visits = 0
     node_names = []
     while True:
-        TW = time_window(prevVisits, initial_inv, rate, tankage, size)
+        TW = time_window(prev_visits, initial_inv, rate, tankage, size)
         if TW[1] > time_horizon:
             break
         # otherwise the time window is within the time horizon
-        node_names.append('{}-{}'.format(name, prevVisits))
+        node_names.append('{}-{}'.format(name, prev_visits))
         problem.addNode(node_names[-1], TW)
-        prevVisits+=1
+        prev_visits+=1
     return node_names
 
 def DefineProblem(TimeHorizon, make_feasible=False):
@@ -168,6 +167,13 @@ def DefineProblem(TimeHorizon, make_feasible=False):
         for node in port:
             prob.addArc(node, 'Depot', 0, 0)
 
+    # No guarantee that the problem is feasible
+    # (although probably is for TimeHorizon <= 200)
+    # if desired, we can modify the problem to ensure that it has a feasible soln
+    high_cost = (TimeHorizon/6.0)*1500
+    if make_feasible:
+        prob.make_feasible(high_cost)
+
     return prob
 
 def getQUBO(TimeHorizon, feasibility=False):
@@ -204,6 +210,17 @@ def test():
         print()
     return
 
+def test_feas():
+    prob = DefineProblem(300, make_feasible=True)
+    fs = prob.feasible_solution
+    A_eq, b_eq, Q_eq, r_eq = prob.getConstraintData()
+    res = A_eq.dot(fs) - b_eq
+    res_q = Q_eq.dot(fs).dot(fs) - r_eq
+    print("residual: {}".format(res))
+    assert np.isclose(np.linalg.norm(res), 0), "Feasible solution is not feasible"
+    assert np.isclose(res_q, 0), "Feasible solution is not feasible (quad con)"
+    return
 
 if __name__ == "__main__":
-    test()
+    # test()
+    test_feas()

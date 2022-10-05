@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Created on Wed Jun 20 09:42:01 2018
 
@@ -343,7 +342,7 @@ class RoutingProblem:
         # end loop
         return unvisited_indices, routes
 
-    def make_feasible(self, exit_penalty, time_penalty):
+    def make_feasible(self, high_cost):
         """
         Some sort of greedy construction heuristic to make sure the problem is 
         feasible. We add dummy node/arcs as necessary to emulate more
@@ -351,15 +350,17 @@ class RoutingProblem:
         """
         # Add routes greedily (no/little exploration),
         # but keep the list of unvisited nodes.
-        time_costs = lambda t: time_penalty*t
+        exit_penalty = numpy.max(self.route_costs)
+        time_penalty = 10
         node_costs = [0]*len(self.Nodes)
         node_costs[self.depotIndex] = exit_penalty
+        time_costs = lambda t: time_penalty*t
         unvisited_indices, routes = self.addRoutes_better(0, node_costs, time_costs)
         unvisited_indices.remove(self.depotIndex)
 
         # Add arcs and construct routes through the nodes that remain unvisited
         # Make new arcs as costly as most expensive (regular) route
-        high_cost = numpy.max(self.route_costs)
+        # high_cost = numpy.max(self.route_costs)
         depot_name = self.NodeNames[self.depotIndex]
         for u in unvisited_indices:
             # Add arcs and a route through the unvisited node;
@@ -397,7 +398,7 @@ class RoutingProblem:
             logger.info("New feasibility route: {}".format(r))
             assert feas, "Something not right in make_feasible"
 
-        # save this possible solution... make sure it is feasible later??
+        # construct and save feasible solution
         feas_sol = numpy.zeros(len(self.route_costs))
         for r in routes:
             i = self.routes.index(r)
