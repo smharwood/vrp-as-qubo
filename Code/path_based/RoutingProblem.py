@@ -359,6 +359,9 @@ class RoutingProblem:
         unvisited_indices.remove(self.depotIndex)
 
         # Add arcs and construct routes through the nodes that remain unvisited
+        # Note that we will add a node, which also adds a new CONSTRAINT to the
+        # problem - but the constructed route will automatically satisfy the new
+        # constraint.
         # Make new arcs as costly as most expensive (regular) route
         # high_cost = numpy.max(self.route_costs)
         depot_name = self.NodeNames[self.depotIndex]

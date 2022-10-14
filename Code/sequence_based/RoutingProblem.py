@@ -299,12 +299,12 @@ class RoutingProblem:
 
         # Constraint: Once a vehicle returns to depot, it remains there
         # x_{vi,si,d}  * x_{vi,si+1,nj} = 0, \forall vi, si >= 1, nj \neq d
-        for nj in range(1,len(self.Nodes)):
-            # If this is not a valid arc, then we already added this constraint above
-            if not self.checkArc((0,nj)):
-                continue
+        for vi in range(self.maxVehicles):
             for si in range(1,self.maxSequenceLength-1):
-                for vi in range(self.maxVehicles):
+                for nj in range(1,len(self.Nodes)):
+                    # If this is not a valid arc, then we already added this constraint above
+                    if not self.checkArc((0,nj)):
+                        continue
                     pqrow, pqcol = self.quadratic_constraint_logic(
                         vi, si, 0, nj, pqrow, pqcol
                     )
