@@ -1,215 +1,169 @@
 """
 SM Harwood
 19 December 2019
-
-Container for a arc-based formulation of a 
-Vehicle Routing Problem with Time Windows
 """
 import time
-import numpy
-import scipy.sparse as sparse
+import logging
+import numpy as np
+from scipy import sparse
+from routing_problem import RoutingProblem
 try:
     import cplex
 except ImportError:
     pass
 
-class RoutingProblem:
+logger = logging.getLogger(__name__)
+
+class ArcBasedRoutingProblem(RoutingProblem):
     """
-    Vehicle Routing Problem with Time Windows (VRPTW)
-    as a discrete-time arc-based formulation
-    is a Binary Linear Equality-Constrained  (BLEC)
-    optimization problem
+    Class to implement the arc-based formulation of a VRPTW
+    Base math program is a 0-1 Integer Linear Program
     which can be transformed to a
     Quadratic Unconstrained Binary Optimization (QUBO) problem
     """
 
-    def __init__(self):
-        # basic data
-        self.Nodes = []
-        self.NodeNames = []
-        self.Arcs = dict()
-        self.TimePoints = []
-        self.VarMapping = []
-        self.variablesEnumerated = False
+    def __init__(self, vrptw=None):
+        super().__init__(vrptw)
+        self.time_points = []
+        self.var_mapping = []
+        self.num_variables = 0
+        self.variables_enumerated = False
         self.constraints_built = False
         self.objective_built = False
+        self.constraint_names = []
 
-        # Parameters of the base formulation:
-        # Binary Linear Equality-Constrained (BLEC) problem
-        self.blec_c = None
-        self.blec_constraints_matrix = None
-        self.blec_constraints_rhs = None
+        # Parameters of the constrained math program formulation:
+        self.objective = None
+        self.constraints_matrix = None
+        self.constraints_rhs = None
 
-    def addNode(self,NodeName,TW):
-        assert NodeName not in self.NodeNames, NodeName + ' is already in Node List'
-        self.Nodes.append(Node(NodeName,TW))
-        self.NodeNames.append(NodeName)
-
-    def addDepot(self,DepotName,TW):
-        """Insert depot at first position of nodes"""
-        if not numpy.isinf(TW[1]):
-            print("Consider making Depot time window infinite in size...")
-        try:
-            if self.NodeNames[0] != DepotName:
-                self.Nodes.insert(0,Node(DepotName,TW))
-                self.NodeNames.insert(0,DepotName)
-            else:
-                print("Depot already added")
-        except(IndexError):
-            self.addNode(DepotName, TW)
-
-    def getNodeIndex(self, NodeName):
-        return self.NodeNames.index(NodeName)
-
-    def getNode(self, NodeName):
-        return self.Nodes[self.getNodeIndex(NodeName)]
-
-    def addArc(self,OName,DName,time,cost=0):
-        """
-        Add a potentially allowable arc;
-        we also check feasibility of TIMING:
-            allow if origin TimeWindow start plus travel time < destination TimeWindow end
-
-        Return:
-            added (bool): whether arc was added or not
-        """
-        i = self.getNodeIndex(OName)
-        j = self.getNodeIndex(DName)
-        departure_time = self.Nodes[i].getWindow()[0]
-        # Add arc if timing works:
-        if departure_time + time <= self.Nodes[j].getWindow()[1]:
-            self.Arcs[(i,j)] = Arc(self.Nodes[i],self.Nodes[j],time,cost)
-            return True
-        else:
-            return False
-
-    def checkArc(self,arcKey):
-        """ Is the arc valid? """
-        try :
-            self.Arcs[arcKey]
-            return True
-        except(KeyError) :
-            return False
-
-    def checkNodeTimeCompat(self, nodeIndex, timeIndex):
-        """ is this node-time pair compatible? """
-        TW = self.Nodes[nodeIndex].getWindow()
-        return timeIndex >= TW[0] and timeIndex <= TW[1]
-
-    def addTimePoints(self, timepoints):
-        """ Populate the valid time points """  
-        # Copy the SORTED timepoints; this can be a sequence, a numpy array, whatever.
+    def add_time_points(self, time_points):
+        """ Populate the valid time points """
+        # Copy the SORTED timepoints; this can be a sequence, a np array, whatever.
         # Variables are indexed by a sequence which can be made of anything,
         # but we do assume they are sorted for some convenience
-        self.TimePoints = numpy.sort(timepoints)
+        self.time_points = np.sort(time_points)
         return
 
+    def check_arc(self, arc_key):
+        """ Is the arc valid? """
+        return arc_key in self.arcs
+        # try:
+        #     self.arcs[arc_key]
+        #     return True
+        # except KeyError:
+        #     return False
 
-    def enumerateVariables(self):
-        if self.variablesEnumerated:
+    def check_node_time_compat(self, node_index, time_point):
+        """ is this node-time pair compatible? """
+        tw = self.nodes[node_index].get_window()
+        return tw[0] <= time_point <= tw[1]
+
+    def enumerate_variables(self):
+        if self.variables_enumerated:
             return
         start = time.time()
-        self.enumerateVariables_quicker()
-        #self.enumerateVariables_exhaustive()
+        self.enumerate_variables_quicker()
+        #self.enumerate_variables_exhaustive()
         duration = time.time() - start
-        print("Variable enumeration took {} seconds".format(duration))
+        logger.info("Variable enumeration took {} seconds".format(duration))
         return
 
-    def enumerateVariables_quicker(self):
+    def enumerate_variables_quicker(self):
         """ Basic operation that needs to be done to keep track of variable counts, indexing """
         num_vars = 0
         # Loop over (i,s,j,t)
         # and check if a variable is allowed (nonzero)
         # Simplification: loop over arcs
-        for (i,j) in self.Arcs.keys():
-            for s in self.TimePoints:
+        for (i,j) in self.arcs.keys():
+            for s in self.time_points:
                 # First check:
                 # is s in the time window of i?
-                if s < self.Nodes[i].getWindow()[0]:
+                if s < self.nodes[i].get_window()[0]:
                     continue
-                if s > self.Nodes[i].getWindow()[1]:
-                    # TimePoints is sorted, so s will keep increasing in this loop
+                if s > self.nodes[i].get_window()[1]:
+                    # time_points is sorted, so s will keep increasing in this loop
                     # This condition will continue to be satisfied
                     break
-                for t in self.TimePoints:
+                for t in self.time_points:
                     # Second check:
                     # is t in the time window of j?
-                    if t < self.Nodes[j].getWindow()[0]:
+                    if t < self.nodes[j].get_window()[0]:
                         continue
-                    if t > self.Nodes[j].getWindow()[1]:
+                    if t > self.nodes[j].get_window()[1]:
                         # Same as with s loop: t will keep increasing in this loop
                         break
                     # Third check
                     # is the travel time from i to j consistent with the timing?
-                    if s + self.Arcs[(i,j)].getTravelTime() > t:
+                    if s + self.arcs[(i,j)].get_travel_time() > t:
                         continue
 
                     # at this point, the tuple (i,s,j,t) is allowed
                     # record the index
-                    self.VarMapping.append((i,s,j,t))
+                    self.var_mapping.append((i,s,j,t))
                     num_vars += 1
         # end loops
-        self.NumVariables = num_vars
-        self.variablesEnumerated = True
+        self.num_variables = num_vars
+        self.variables_enumerated = True
         return
 
-    def enumerateVariables_exhaustive(self):
+    def enumerate_variables_exhaustive(self):
         """ Basic operation that needs to be done to keep track of variable counts, indexing """
         num_vars = 0
         # Loop over (i,s,j,t)
         # and check if a variable is allowed (nonzero)
-        for i in range(len(self.Nodes)):
-            for s in self.TimePoints:
+        for i in range(len(self.nodes)):
+            for s in self.time_points:
                 # first check:
                 # is s in the time window of i?
-                #if s < self.Nodes[i].getWindow()[0] or s > self.Nodes[i].getWindow()[1]:
-                if not self.checkNodeTimeCompat(i,s):
+                #if s < self.nodes[i].get_window()[0] or s > self.nodes[i].get_window()[1]:
+                if not self.check_node_time_compat(i,s):
                     continue
-                for j in range(len(self.Nodes)):
+                for j in range(len(self.nodes)):
                     # second check:
                     # is (i,j) an allowed arc?
-                    if not self.checkArc((i,j)):
+                    if not self.check_arc((i,j)):
                         continue
-                    for t in self.TimePoints:
+                    for t in self.time_points:
                         # third check:
                         # is t in the time window of j?
-                        #if t < self.Nodes[j].getWindow()[0] or t > self.Nodes[j].getWindow()[1]:
-                        if not self.checkNodeTimeCompat(j,t):
+                        #if t < self.nodes[j].get_window()[0] or t > self.nodes[j].get_window()[1]:
+                        if not self.check_node_time_compat(j,t):
                             continue
                         # fourth check
                         # is the travel time from i to j consistent with the timing?
-                        if s + self.Arcs[(i,j)].getTravelTime() > t:
+                        if s + self.arcs[(i,j)].get_travel_time() > t:
                             continue
 
                         # at this point, the tuple (i,s,j,t) is allowed
                         # record the index
-                        self.VarMapping.append((i,s,j,t))
+                        self.var_mapping.append((i,s,j,t))
                         num_vars += 1
         # end loops
-        self.NumVariables = num_vars
-        self.variablesEnumerated = True
+        self.num_variables = num_vars
+        self.variables_enumerated = True
         return
 
-    def getNumVariables(self):
+    def get_num_variables(self):
         """ number of variables in formulation """
-        return self.NumVariables
+        return self.num_variables
 
-    def getVarIndex(self, ONodeIndex, OTimeIndex, DNodeIndex, DTimeIndex):
+    def get_var_index(self, ONodeIndex, OTimeIndex, DNodeIndex, DTimeIndex):
         """Get the unique id/index of the binary variable given the "tuple" indexing
            Return of None means the tuple does not correspond to a variable """
         try:
-            return self.VarMapping.index((ONodeIndex, OTimeIndex, DNodeIndex, DTimeIndex))
-        except(ValueError):
+            return self.var_mapping.index((ONodeIndex, OTimeIndex, DNodeIndex, DTimeIndex))
+        except ValueError:
             return None
 
-    def getVarTupleIndex(self, vIndex):
-        """Inverse of getVarIndex"""
+    def get_var_tuple_index(self, var_index):
+        """Inverse of get_var_index"""
         try:
-            return self.VarMapping[vIndex]
-        except(IndexError):
+            return self.var_mapping[var_index]
+        except IndexError:
             return None
 
-    def build_blec_obj(self): 
+    def build_objective(self):
         """
         Build up linear objective of base BLEC formulation
         """
@@ -217,34 +171,34 @@ class RoutingProblem:
            # Objective already built
             return
 
-        self.enumerateVariables()
+        self.enumerate_variables()
         # linear terms 
-        self.blec_c = numpy.zeros(self.getNumVariables())
-        for k in range(self.getNumVariables()):
-            (i,s,j,t) = self.VarMapping[k]
-            self.blec_c[k] = self.Arcs[(i,j)].getCost()
+        self.objective = np.zeros(self.get_num_variables())
+        for k in range(self.get_num_variables()):
+            (i,s,j,t) = self.var_mapping[k]
+            self.objective[k] = self.arcs[(i,j)].get_cost()
         self.objective_built = True
         return
 
-    def build_blec_constraints(self):
+    def build_constraints(self):
         if self.constraints_built:
             # Constraints already built
             return
         start = time.time()
-        self.build_blec_constraints_quicker()
-        #self.build_blec_constraints_exhaustive()
+        self.build_constraints_quicker()
+        #self.build_constraints_exhaustive()
         duration = time.time() - start
-        print("Constraint construction took {} seconds".format(duration))
+        logger.info("Constraint construction took {} seconds".format(duration))
         return
 
-    def build_blec_constraints_exhaustive(self):
+    def build_constraints_exhaustive(self):
         """
         Build up Linear equality constraints of BLEC
         A*x = b
 
         SLOW but probably correct? Might add a bunch of vacuous constraints
         """
-        self.enumerateVariables()
+        self.enumerate_variables()
 
         aval = []
         arow = []
@@ -255,17 +209,17 @@ class RoutingProblem:
         # Flow conservation constraints (for each (i,s))
         # EXCEPT DEPOT
         # see above- Depot is first in node list
-        for i in range(1,len(self.Nodes)):
-            for s in self.TimePoints:
+        for i in range(1,len(self.nodes)):
+            for s in self.time_points:
                 # sum_jt x_jtis - sum_jt x_isjt = 0
-                for j in range(len(self.Nodes)):
-                    for t in self.TimePoints:   
-                        col = self.getVarIndex(j,t,i,s)
+                for j in range(len(self.nodes)):
+                    for t in self.time_points:   
+                        col = self.get_var_index(j,t,i,s)
                         if col is not None:
                             aval.append(1)
                             arow.append(row_index)
                             acol.append(col)
-                        col = self.getVarIndex(i,s,j,t)
+                        col = self.get_var_index(i,s,j,t)
                         if col is not None:
                             aval.append(-1)
                             arow.append(row_index)
@@ -276,12 +230,12 @@ class RoutingProblem:
 
         # Sevicing/visitation constraints (for each j)
         # EXCEPT DEPOT (again, depot is first in node list)
-        for j in range(1,len(self.Nodes)):
+        for j in range(1,len(self.nodes)):
             # sum_ist x_isjt = 1
-            for i in range(len(self.Nodes)):
-                for s in self.TimePoints:
-                    for t in self.TimePoints:   
-                        col = self.getVarIndex(i,s,j,t)
+            for i in range(len(self.nodes)):
+                for s in self.time_points:
+                    for t in self.time_points:   
+                        col = self.get_var_index(i,s,j,t)
                         if col is not None:
                             aval.append(1)
                             arow.append(row_index)
@@ -290,55 +244,54 @@ class RoutingProblem:
             brhs.append(1)
             row_index += 1  
 
-        self.blec_constraints_matrix = sparse.coo_matrix((aval,(arow,acol)))
-        self.blec_constraints_rhs = numpy.array(brhs)
+        self.constraints_matrix = sparse.coo_matrix((aval,(arow,acol)))
+        self.constraints_rhs = np.array(brhs)
         self.constraints_built = True
         return
 
-    def build_blec_constraints_quicker(self):
+    def build_constraints_quicker(self):
         """
         Build up Linear equality constraints of BLEC
         A*x = b
 
         FASTER
         """
-        self.enumerateVariables()
+        self.enumerate_variables()
 
         aval = []
         arow = []
         acol = []
         brhs = []
         row_index = 0
-        self.constraint_names = []
         
         # Flow conservation constraints (for each (i,s))
         # EXCEPT DEPOT
         # see above- Depot is first in node list
         # First, index the non-trivial constraints
         flow_conservation_mapping = []
-        for i in range(1,len(self.Nodes)):
-            for s in self.TimePoints:
+        for i in range(1,len(self.nodes)):
+            for s in self.time_points:
                 # Constraint:
                 # sum_jt x_jtis - sum_jt x_isjt = 0
 
                 # is s in the time window of i?
                 # (if not, this is a vacuous constraint)
-                if s < self.Nodes[i].getWindow()[0]:
+                if s < self.nodes[i].get_window()[0]:
                     continue
-                if s > self.Nodes[i].getWindow()[1]:
-                    # TimePoints is sorted, so s will keep increasing in this loop
+                if s > self.nodes[i].get_window()[1]:
+                    # time_points is sorted, so s will keep increasing in this loop
                     # This condition will continue to be satisfied
                     # (and so s NOT in time window)
                     break
                 flow_conservation_mapping.append((i,s))
                 brhs.append(0)
-                self.constraint_names.append("cflow_{},{}".format(i,s))
+                self.constraint_names.append(f"cflow_{i},{s}")
                 row_index += 1
         # NOW, go through variables
         # Note: each variable is an arc, and participates in (at most) TWO constraints:
         # once for INflow to a node, and once for OUTflow from a node
-        for col in range(self.getNumVariables()):
-            (i,s,j,t) = self.getVarTupleIndex(col)
+        for col in range(self.get_num_variables()):
+            (i,s,j,t) = self.get_var_tuple_index(col)
             # OUTflow:
             try:
                 row = flow_conservation_mapping.index((i,s))
@@ -359,11 +312,11 @@ class RoutingProblem:
         # Servicing/visitation constraints (for each j)
         # EXCEPT DEPOT (again, depot is first in node list)
         # sum_ist x_isjt = 1
-        brhs = brhs + [1]*(len(self.Nodes) - 1)
-        for j in range(1,len(self.Nodes)):
-            self.constraint_names.append("cnode{}".format(j))
-        for col in range(self.getNumVariables()):
-            (i,s,j,t) = self.getVarTupleIndex(col)
+        brhs = brhs + [1]*(len(self.nodes) - 1)
+        for j in range(1,len(self.nodes)):
+            self.constraint_names.append(f"cnode{j}")
+        for col in range(self.get_num_variables()):
+            (i,s,j,t) = self.get_var_tuple_index(col)
             # We don't care about how many times depot is visited
             if j == 0:
                 continue
@@ -372,65 +325,53 @@ class RoutingProblem:
             acol.append(col)
 
 #        # Original version (slower)
-#        for j in range(1,len(self.Nodes)):
+#        for j in range(1,len(self.nodes)):
 #            # sum_ist x_isjt = 1
-#            for col in range(self.getNumVariables()):
-#                (i,s,jp,t) = self.getVarTupleIndex(col)
+#            for col in range(self.get_num_variables()):
+#                (i,s,jp,t) = self.get_var_tuple_index(col)
 #                if jp == j:
 #                    aval.append(1)
 #                    arow.append(row_index)
 #                    acol.append(col)
 #            # end construction of row entries
 #            brhs.append(1)
-#            row_index += 1  
+#            row_index += 1
 
-        self.blec_constraints_matrix = sparse.coo_matrix((aval,(arow,acol)))
-        self.blec_constraints_rhs = numpy.array(brhs)
+        self.constraints_matrix = sparse.coo_matrix((aval,(arow,acol)))
+        self.constraints_rhs = np.array(brhs)
         self.constraints_built = True
         return
 
-    def estimate_max_vehicles(self):
-        """ Estimate maximum number of vehicles based on degree of depot node in graph """
-        num_outgoing = 0
-        num_incoming = 0
-        # recall: depot is index 0
-        for arc in self.Arcs.keys():
-            if arc[0] == 0:
-                num_outgoing += 1
-            if arc[1] == 0:
-                num_incoming += 1
-        return min(num_outgoing, num_incoming)
-
-    def get_arrival_time(self, time, arc):
-        """ Get actual arrival time, leaving at <time> on <arc>
+    def get_arrival_time(self, departure_time, arc):
+        """ Get actual arrival time, leaving at <departure_time> on <arc>
         
         Return:
             arrival_time (float): Arrival time
-            in_TimePoints (bool): whether this arrival time is in TimePoints set
+            in_time_points (bool): whether this arrival time is in time_points set
         """
         # Recall: cannot arrive before time window
-        TW = self.Arcs[arc].getD().getWindow()
-        arrival = max(TW[0], time + self.Arcs[arc].getTravelTime())
-        greater_TimePoints = (self.TimePoints >= arrival)
-        if not any(greater_TimePoints):
+        TW = self.arcs[arc].get_destination().get_window()
+        arrival = max(TW[0], departure_time + self.arcs[arc].get_travel_time())
+        greater_time_points = (self.time_points >= arrival)
+        if not any(greater_time_points):
             return arrival, False
-        arr = numpy.argmax(greater_TimePoints)
-        arrival_actual = self.TimePoints[arr]
+        arr = np.argmax(greater_time_points)
+        arrival_actual = self.time_points[arr]
         return arrival_actual, True
 
     def make_feasible(self, high_cost):
         """
-        Some sort of greedy construction heuristic to make sure the problem is 
+        Some sort of greedy construction heuristic to make sure the problem is
         feasible. We add dummy nodes/arcs as necessary to emulate more
         vehicles being available.
         """
         # Initialize list of unvisited node indices
         # remove depot
-        unvisited_indices = list(range(len(self.Nodes)))
+        unvisited_indices = list(range(len(self.nodes)))
         unvisited_indices.remove(0)
 
         # starting from depot,
-        # go through unvisited nodes, 
+        # go through unvisited nodes,
         # greedily visit first unvisited node that we can (satisfying timing constraints)
         # repeat until outgoing arcs from depot are exhausted
         used_arcs = []
@@ -438,20 +379,20 @@ class RoutingProblem:
         for _ in range(max_vehicles):
             # start from depot, build a route
             current_node = 0 # depot is first node
-            current_time = self.TimePoints[0]
+            current_time = self.time_points[0]
             building_route = True
             while building_route:
                 # go through unvisited nodes, choose first available
                 best_node = None
-                best_arrival = numpy.inf
+                best_arrival = np.inf
                 for n in unvisited_indices:
                     arc = (current_node, n)
-                    if self.checkArc(arc):
+                    if self.check_arc(arc):
                         # this is a potentially allowed arc- need to check timing
-                        TW = self.Nodes[n].getWindow()
+                        TW = self.nodes[n].get_window()
                         arrival_actual, inTP = self.get_arrival_time(current_time, arc)
                         if not inTP:
-                            # arrival time is beyond current TimePoints
+                            # arrival time is beyond current time_points
                             continue
                         if arrival_actual <= min(TW[1], best_arrival):
                             # this timing is valid AND we arrive earlier than all others yet
@@ -473,8 +414,8 @@ class RoutingProblem:
                     # time points available
                     arrival_actual, inTP = self.get_arrival_time(current_time, arc)
                     if not inTP:
-                        # if arrival time is not in TimePoints, add it in
-                        self.TimePoints = numpy.append(self.TimePoints, arrival_actual)
+                        # if arrival time is not in time_points, add it in
+                        self.time_points = np.append(self.time_points, arrival_actual)
                     used_arcs.append((current_node,current_time, 0,arrival_actual))
             # end building route
         # end construction over all routes
@@ -483,23 +424,23 @@ class RoutingProblem:
         # and record these dummy routes
         for n in unvisited_indices:
             # Since we are adding arcs, we need to re-construct/enumerate stuff
-            self.variablesEnumerated = False
+            self.variables_enumerated = False
             self.constraints_built = False
             self.objective_built = False
 
             arc = (0, n)
-            depot_nm = self.NodeNames[0]
-            node_nm = self.NodeNames[n]
-            assert not self.checkArc(arc), \
-                "We should have been able to construct a route through node {}".format(node_nm)
-            print("Adding entry arc to {}".format(node_nm))
-            added = self.addArc(depot_nm, node_nm, 0, high_cost)
+            depot_nm = self.node_names[0]
+            node_nm = self.node_names[n]
+            assert not self.check_arc(arc), \
+                f"We should have been able to construct a route through node {node_nm}"
+            logger.info("Adding entry arc to {}".format(node_nm))
+            added = self.add_arc(depot_nm, node_nm, 0, high_cost)
             assert added, "Something is wrong in construction heuristic"
-            current_time = self.TimePoints[0]
+            current_time = self.time_points[0]
             arrival, inTP = self.get_arrival_time(current_time, arc)
             # Since the arc we added has zero travel time, 
-            # arrival time should be in TimePoints already...
-            assert inTP, "Arriving at {}: not in TimePoints??".format(arrival)
+            # arrival time should be in time_points already...
+            assert inTP, f"Arriving at {arrival}: not in time_points??"
             used_arcs.append((0, current_time, n, arrival))
             current_time = arrival
 
@@ -507,53 +448,52 @@ class RoutingProblem:
             self.check_and_add_exit_arc(n, high_cost)
             arc = (n, 0)
             arrival, inTP = self.get_arrival_time(current_time, arc)
-            assert inTP, "Arriving at {}: not in TimePoints??".format(arrival)
+            assert inTP, f"Arriving at {arrival}: not in time_points??"
             used_arcs.append((n, current_time, 0, arrival))
         # done fixing
 
         # construct and save feasible solution
-        self.enumerateVariables()
-        self.feasible_solution = numpy.zeros(self.NumVariables)
+        self.enumerate_variables()
+        self.feasible_solution = np.zeros(self.num_variables)
         for a in used_arcs:
-            self.feasible_solution[self.getVarIndex(*a)] = 1
+            self.feasible_solution[self.get_var_index(*a)] = 1
         return
 
     def check_and_add_exit_arc(self, node_index, cost=0):
-        """ If exit arc from Nodes[node_index] to depot does not exist,
+        """ If exit arc from nodes[node_index] to depot does not exist,
         add it with zero travel time BUT cost of cost
         """
         arc = (node_index, 0)
-        if not self.checkArc(arc):
-            node_nm = self.NodeNames[node_index]
-            depot_nm = self.NodeNames[0]
-            print("Adding exit arc from {}".format(node_nm))
-            added = self.addArc(node_nm, depot_nm, 0, cost)
-            assert added, "Something is wrong with exit arcs: {} not added".format(arc)
+        if not self.check_arc(arc):
+            node_nm = self.node_names[node_index]
+            depot_nm = self.node_names[0]
+            logger.info("Adding exit arc from {}".format(node_nm))
+            added = self.add_arc(node_nm, depot_nm, 0, cost)
+            assert added, f"Something is wrong with exit arcs: {arc} not added"
             # Since we are adding arcs, we need to re-construct/enumerate stuff
-            self.variablesEnumerated = False
+            self.variables_enumerated = False
             self.constraints_built = False
             self.objective_built = False
         return
 
-    def getRoutes(self, solution):
+    def get_routes(self, solution):
         """
         Get a representation of the paths/ vehicle routes in a solution
         
-        solution: binary vector corresponding to a solution       
+        solution: binary vector corresponding to a solution
         """
-        soln_var_indices = numpy.nonzero(solution)
+        soln_var_indices = np.nonzero(solution)
         soln_var_indices = soln_var_indices[0]
-        # Lexicographically sort the indices; all routes start from Depot (node index zero), 
+        # Lexicographically sort the indices; all routes start from Depot (node index zero),
         # so sort the arcs so that those leaving the depot are first
-        # Flip the tuples because numpy.lexsort sorts on last row, second to last row, ...
-        soln_var_tuples = [self.getVarTupleIndex(k) for k in soln_var_indices]
-        tuples_to_sort = numpy.flip(numpy.array(soln_var_tuples), -1)
-        arg_sorted = numpy.lexsort(tuples_to_sort.T)
+        # Flip the tuples because np.lexsort sorts on last row, second to last row, ...
+        soln_var_tuples = [self.get_var_tuple_index(k) for k in soln_var_indices]
+        tuples_to_sort = np.flip(np.array(soln_var_tuples), -1)
+        arg_sorted = np.lexsort(tuples_to_sort.T)
         tuples_ordered = [soln_var_tuples[i] for i in arg_sorted]
-        #print(tuples_ordered)
         # While building route, do some dummy checks to make sure formulation is right;
         # check that each node is visited exactly once
-        visited = numpy.zeros(len(self.Nodes))
+        visited = np.zeros(len(self.nodes))
         routes = []
         while len(tuples_ordered) > 0:
             routes.append([])
@@ -565,7 +505,7 @@ class RoutingProblem:
                 routes[-1].append((arc[0], arc[1]))
                 node_to_find = (arc[2], arc[3])
                 visited[arc[2]] += 1
-                assert self.checkNodeTimeCompat(arc[2], arc[3]), "Node time window not satisfied"
+                assert self.check_node_time_compat(arc[2], arc[3]), "Node time window not satisfied"
                 node_found = False
                 for i,a in enumerate(tuples_ordered):
                     if node_to_find == (a[0], a[1]):
@@ -579,42 +519,35 @@ class RoutingProblem:
         # end building all routes
         assert all(visited[1:] == 1), "Solution does not obey node visitation constraints"
         return routes
-        
 
-    def getCplexProb(self):
+    def get_cplex_prob(self):
         """
         Get a CPLEX object containing the BLEC/MIP representation
         """
-        self.build_blec_obj()
-        self.build_blec_constraints()
+        self.build_objective()
+        self.build_constraints()
 
         cplex_prob = cplex.Cplex()
 
         # Variables: all binary
         # constraints: all equality
-        var_types = [cplex_prob.variables.type.binary] * len(self.blec_c)
+        var_types = [cplex_prob.variables.type.binary] * len(self.objective)
         namer = lambda isjt: "n{}t{}_n{}t{}".format(isjt[0], isjt[1], isjt[2], isjt[3])
-        names = list(map(namer, self.VarMapping))
-        con_types = ['E'] * len(self.blec_constraints_rhs)
-        rows = self.blec_constraints_matrix.row.tolist()
-        cols = self.blec_constraints_matrix.col.tolist()
-        vals = self.blec_constraints_matrix.data.tolist()
+        names = list(map(namer, self.var_mapping))
+        con_types = ['E'] * len(self.constraints_rhs)
+        rows = self.constraints_matrix.row.tolist()
+        cols = self.constraints_matrix.col.tolist()
+        vals = self.constraints_matrix.data.tolist()
 
         # define object
         cplex_prob.objective.set_sense(cplex_prob.objective.sense.minimize)
-        cplex_prob.variables.add(obj=self.blec_c.tolist(), types=var_types, names=names)
-        cplex_prob.linear_constraints.add(rhs=self.blec_constraints_rhs.tolist(), senses=con_types,
+        cplex_prob.variables.add(obj=self.objective.tolist(), types=var_types, names=names)
+        cplex_prob.linear_constraints.add(rhs=self.constraints_rhs.tolist(), senses=con_types,
             names=self.constraint_names)
         cplex_prob.linear_constraints.set_coefficients(zip(rows, cols, vals))
         return cplex_prob
 
-    def solveCplexProb(self, filename_sol='cplex.sol'):
-        cplex_prob = self.getCplexProb()
-        cplex_prob.solve()
-        cplex_prob.solution.write(filename_sol)
-        return
-
-    def getConstraintData(self):
+    def get_constraint_data(self):
         """
         Return constraints in a consistent way
         A_eq * x = b_eq
@@ -629,33 +562,35 @@ class RoutingProblem:
                 (potentially all zeros if there are no nontrivial quadratic constraints)
             r_eq (float): Right-hand side of the quadratic constraint
         """
-        self.build_blec_constraints()
-        A_eq = self.blec_constraints_matrix
-        b_eq = self.blec_constraints_rhs
-        n = self.getNumVariables()
+        self.build_constraints()
+        A_eq = self.constraints_matrix
+        b_eq = self.constraints_rhs
+        n = self.get_num_variables()
         # if anything is empty, make sure its dense
-        if len(b_eq) == 0: A_eq = A_eq.toarray()
+        if len(b_eq) == 0:
+            A_eq = A_eq.toarray()
         return A_eq, b_eq, sparse.csr_matrix((n,n)), 0
 
-    def getQUBO(self, penalty_parameter=None, feasibility=False):
+    def get_qubo(self, penalty_parameter=None, feasibility=False):
         """
         Get the Quadratic Unconstrained Binary Optimization problem
         reformulation of the BLEC
         penalty_parameter : value of penalty parameter to use for reformulation
             Default: None (determined by arc costs)
         """
-        self.build_blec_obj()
-        self.build_blec_constraints()
+        self.build_objective()
+        self.build_constraints()
 
         if feasibility:
             penalty_parameter = 1.0
         else:
-            sum_arc_cost = sum([numpy.fabs(arc.getCost()) for arc in self.Arcs.values()])
-            sufficient_pp = (len(self.TimePoints)**2)*sum_arc_cost
+            sum_arc_cost = sum([np.fabs(arc.get_cost()) for arc in self.arcs.values()])
+            sufficient_pp = (len(self.time_points)**2)*sum_arc_cost
             if penalty_parameter is None:
                 penalty_parameter = sufficient_pp + 1.0
             if penalty_parameter <= sufficient_pp:
-                print("Penalty parameter might not be big enough...(>{})".format(sufficient_pp))
+                logger.warning(
+                    "Penalty parameter might not be big enough...(>{})".format(sufficient_pp))
 
         qval = []
         qrow = []
@@ -663,86 +598,36 @@ class RoutingProblem:
 
         # according to scipy.sparse documentation,
         # (https://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.coo_matrix.html#scipy.sparse.coo_matrix)
-        # Duplicated entries are merely summed to together when converting to an array or other sparse matrix type
-        # This is consistent with our aim
+        # Duplicated entries are merely summed to together when converting to an
+        # array or other sparse matrix type. This is consistent with our aim
         
         # Linear objective terms:
         if not feasibility:
-            for i in range(self.getNumVariables()):
-                if self.blec_c[i] != 0:
+            for i in range(self.get_num_variables()):
+                if self.objective[i] != 0:
                     qrow.append(i)
                     qcol.append(i)
-                    qval.append(self.blec_c[i])
+                    qval.append(self.objective[i])
 
         # Linear Equality constraints:
         # rho * ||Ax - b||^2 = rho*( x^T (A^T A) x - 2b^T A x + b^T b )
 
         # Put -2b^T A on the diagonal:
-        TwoBTA = -2*self.blec_constraints_matrix.transpose().dot(self.blec_constraints_rhs)     
-        for i in range(self.getNumVariables()):
+        TwoBTA = -2*self.constraints_matrix.transpose().dot(self.constraints_rhs)
+        for i in range(self.get_num_variables()):
             if TwoBTA[i] != 0:
                 qrow.append(i)
                 qcol.append(i)
                 qval.append(penalty_parameter*TwoBTA[i])
 
         # Construct the QUBO objective matrix so far
-        Q = sparse.coo_matrix((qval,(qrow,qcol)), shape=(self.getNumVariables(),self.getNumVariables()) )
+        Q = sparse.coo_matrix((qval,(qrow,qcol)), shape=(self.get_num_variables(),self.get_num_variables()) )
 
         # Add A^T A to it
         # This will be some sparse matrix (probably CSR format)
-        Q = Q + penalty_parameter*self.blec_constraints_matrix.transpose().dot(self.blec_constraints_matrix)
+        Q = Q + penalty_parameter*self.constraints_matrix.transpose().dot(self.constraints_matrix)
 
         # constant term of QUBO objective
-        constant = penalty_parameter*self.blec_constraints_rhs.dot(self.blec_constraints_rhs)
+        constant = penalty_parameter*self.constraints_rhs.dot(self.constraints_rhs)
 
         return Q, constant
-
-    def export_mip(self, filename=None):
-        """ Export BLEC/MIP representation of problem """
-        if filename is None:
-            filename = 'arc_based_rp.lp'
-        cplex_prob = self.getCplexProb()
-        cplex_prob.write(filename)
-        return
-
-
-class Node:
-    """
-    A node is a customer, which must be visited in a particular window of time
-    """
-    def __init__(self,Name,TW):
-        assert TW[0] <= TW[1], 'Time window for '+Name+' not valid'
-        self.name = Name
-        self.tw = TW
-    def getName(self):
-        return self.name
-    def getWindow(self):
-        return self.tw
-    def __str__(self):
-        return self.name
-    def __repr__(self):
-        return "{}: in {}".format(self.name, self.tw)
-
-
-class Arc:
-    """
-    An arc goes from one node to another (distinct) node
-    It has an associated travel time, and a cost
-    """
-    def __init__(self,From,To,TravelTime,Cost):
-        assert From is not To, 'Arc endpoints must be distinct'
-        self.origin = From
-        self.destination = To
-        self.traveltime = TravelTime
-        self.cost = Cost
-    def getO(self):
-        return self.origin
-    def getD(self):
-        return self.destination
-    def getTravelTime(self):
-        return self.traveltime
-    def getCost(self):
-        return self.cost
-    def __str__(self):
-        return "{} to {}; time={}".format(self.origin.getName(),self.destination.getName(),self.traveltime)
-

@@ -1,18 +1,12 @@
 """
-Created on Wed Jun 20 09:42:01 2018
-
-@author: stuart.m.harwood@exxonmobil.com
-
-Defining a routing problem
-Specifically, as seen as a set partitioning problem.
-See Desrochers, Desrosiers, Solomon, "A new optimization algorithm for the vehicle routing problem with time windows"
-
-The ultimate goal is to express an instance as a Quadratic Unconstrained Binary Optimization problem
+SM Harwood
+16 October 2022
 """
 import logging
-import numpy
-import scipy.sparse as sparse
+import numpy as np
+from scipy import sparse
 from scipy.special import softmax
+from routing_problem import RoutingProblem
 try:
     import cplex
 except ImportError:
@@ -20,10 +14,14 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-class RoutingProblem:
+class PathBasedRoutingProblem(RoutingProblem):
     """
-    The Routing Problem, as a (binary) integer program (IP),
-    has the following formulation:
+    Class to implement the path-based formulation of a VRPTW
+    Base math program is a 0-1 Integer Linear Program (ILP)
+    which can be transformed to a
+    Quadratic Unconstrained Binary Optimization (QUBO) problem
+
+    ILP:
 
     \min_x \sum_r c_r x_r
       s.t.
@@ -45,119 +43,83 @@ class RoutingProblem:
     are encoded in what is a valid or feasible route
     """
 
-    def __init__(self):
-        # basic data
-        self.NodeNames = []
-        self.Nodes = []
-        self.Arcs = dict()
-        self.depotIndex = 0 # default depot is zeroth node
-        self.vehicleCap = 0
-        self.initial_loading = 0
+    def __init__(self, vrptw=None):
+        super().__init__(vrptw)
         self.routes = []
         self.route_costs = []
         self.route_node_visited = []
 
-    def getNodeIndex(self, NodeName):
-        return self.NodeNames.index(NodeName)
-        
-    def getNode(self, NodeName):
-        return self.Nodes[self.getNodeIndex(NodeName)]
-        
-    def setDepot(self, DepotName):
-        self.depotIndex = self.NodeNames.index(DepotName)
-        return
-        
-    def setVehicleCap(self, VehicleCap):
-        self.vehicleCap = VehicleCap
-        return
-        
-    def setInitialLoading(self, Loading):
-        self.initial_loading = Loading
-        return
-
-    def addNode(self, NodeName, Demand, TW=(0, numpy.inf)):
-        assert NodeName not in self.NodeNames, NodeName + ' is already in Node List'
-        self.Nodes.append(Node(NodeName, Demand, TW))
-        self.NodeNames.append(NodeName)
-        return
-
-    def addArc(self, OName, DName, Time, Cost=0):
-        i = self.getNodeIndex(OName)
-        j = self.getNodeIndex(DName)
-        self.Arcs[(i, j)] = Arc(self.Nodes[i], self.Nodes[j], Time, Cost)
-        return
-        
-    def getNumVariables(self):
+    def get_num_variables(self):
         return len(self.route_costs)
 
-    def checkRoute(self, CandidateRoute):
+    def check_route(self, candidate_route):
         """ Check to see if this path is an allowed route; does it use valid arcs, visit nodes
         within allowed time windows, and satisfy cumulative demand
 
         args:
-        CandidateRoute (list of int or list of strings): A route to potentially add, defined either
+        candidate_route (list of int or list of strings): A route to potentially add, defined either
             as a list of node indexes or node names
 
         Return:
         feasible (bool): whether the route is a viable route
         cost (float): associated cost of route
-        visitsNode (list of int): List indicating whether
-            this route visits Node[i] (visitsNode[i] = 1)
-            or not (visitsNode[i] = 0)
+        visits_node (list of int): List indicating whether
+            this route visits Node[i] (visits_node[i] = 1)
+            or not (visits_node[i] = 0)
         """
         feasible = True
         cost = 0
-        visitsNode = [0] * (len(self.Nodes))
-        if len(CandidateRoute) < 2:
+        visits_node = [0] * (len(self.nodes))
+        if len(candidate_route) < 2:
             # must be at least 2 stops long
-            return False, cost, visitsNode
+            return False, cost, visits_node
 
-        RouteIndices = CandidateRoute
+        route_indices = candidate_route
         # Convert from list of string node names to indices if necessary
         # (rest are done on the fly)
         check_indexes = (0, 1, -1)
         for index in check_indexes:
-            if isinstance(RouteIndices[index], str):
-                RouteIndices[index] = self.getNodeIndex(RouteIndices[index])
+            if isinstance(route_indices[index], str):
+                route_indices[index] = self.get_node_index(route_indices[index])
 
         # First check:
         # are first and last nodes the depot?
-        if RouteIndices[0] != self.depotIndex or RouteIndices[-1] != self.depotIndex:
-            return False, cost, visitsNode
+        if route_indices[0] != self.depot_index or route_indices[-1] != self.depot_index:
+            return False, cost, visits_node
         # Make sure these are valid arcs,
         # visit each node at most once (besides depot)
         # satisfy capacity constraints
         # and time window constraints
         time = 0
         loading = self.initial_loading
-        for i in range(len(RouteIndices) - 1):
+        for i in range(len(route_indices) - 1):
             # have we already visited this node?
-            if visitsNode[RouteIndices[i]] == 1:
-                return False, cost, visitsNode
+            if visits_node[route_indices[i]] == 1:
+                return False, cost, visits_node
             else:
-                visitsNode[RouteIndices[i]] = 1
+                visits_node[route_indices[i]] = 1
 
             # valid arc?
             # first, convert to index
-            if isinstance(RouteIndices[i + 1], str):
-                RouteIndices[i + 1] = self.getNodeIndex(RouteIndices[i + 1])
-            a = (RouteIndices[i], RouteIndices[i + 1])
+            if isinstance(route_indices[i + 1], str):
+                route_indices[i + 1] = self.get_node_index(route_indices[i + 1])
+            a = (route_indices[i], route_indices[i + 1])
             # will increment time and loading appropriately
-            feasArc, time, loading = self.checkArc(time, loading, a)
-            if feasArc:
-                cost += self.Arcs[a].getCost()
+            feas_arc, time, loading = self.check_arc(time, loading, a)
+            if feas_arc:
+                cost += self.arcs[a].get_cost()
             else:
-                return False, cost, visitsNode
+                return False, cost, visits_node
         # end for loop
-        return feasible, cost, visitsNode
+        return feasible, cost, visits_node
 
-    def checkArc(self, time, load, arcKey):
+    def check_arc(self, time, load, arc_key):
         """ Check if an arc is part of a valid route
 
         args:
         time (float): Time accumulated so far on route (time leaving origin of arc)
         load (float): Load on vehicle
-        arcKey (tuple of int): The pair of node indices of potential arc
+        arc_key (tuple of int): The pair of node indices of potential arc
 
         return:
         feasibleArc (bool): Whether arc is feasible/part of valid route
@@ -166,30 +128,30 @@ class RoutingProblem:
         """
         # is the key even valid?
         try:
-            arc = self.Arcs[arcKey]
-            dest = arc.getD()
-        except(KeyError):
+            arc = self.arcs[arc_key]
+            dest = arc.get_destination()
+        except KeyError:
             return False, time, load
         # Do we arrive before or during the next node's time window?
         # add travel time of current arc,
         # but if we arrive at a node before its time window, we have to wait
-        time += arc.getTravelTime()
-        time = max(time, dest.getWindow()[0])
-        if time > dest.getWindow()[1]:
-            logger.debug("arc {}: time window bad".format(arcKey))
+        time += arc.get_travel_time()
+        time = max(time, dest.get_window()[0])
+        if time > dest.get_window()[1]:
+            logger.debug(f"arc {arc_key}: time window bad")
             return False, time, load
         # Is the load physical (nonnegative and within capacity)?
-        load += dest.getLoad()
-        if load > self.vehicleCap or load < 0:
-            logger.debug("arc {}: capacity bad".format(arcKey))
+        load += dest.get_load()
+        if load > self.vehicle_cap or load < 0:
+            logger.debug(f"arc {arc_key}: capacity bad")
             return False, time, load
         return True, time, load
 
-    def getRouteNames(self, route):
+    def get_route_names(self, route):
         """ Given a sequence of indices, return the corresponding node names """
-        return list(map(lambda n: self.NodeNames[n], route))
+        return list(map(lambda n: self.node_names[n], route))
 
-    def generateRoute(self, vf=None, explore=1, node_costs=None, time_costs=None, unvisited=None):
+    def generate_route(self, vf=None, explore=1, node_costs=None, time_costs=None, unvisited=None):
         """ Generate a route
         Can view this as one iteration of an approximate dynamic programming method
         The goal is to find a good candidate route, and we always have exploration,
@@ -212,19 +174,19 @@ class RoutingProblem:
         """
 
         if vf is None:
-            vf = [0] * len(self.Nodes)
+            vf = [0] * len(self.nodes)
         else:
-            assert len(vf) == len(self.Nodes), 'Value function incorrect size'
+            assert len(vf) == len(self.nodes), 'Value function incorrect size'
 
         if unvisited is None:
-            unvisited = list(range(len(self.Nodes)))
+            unvisited = list(range(len(self.nodes)))
 
         # all routes start at depot
-        currNode = self.depotIndex
+        currNode = self.depot_index
         r = [currNode]
         time = 0
         load = self.initial_loading
-        maxLegs = 2 + len(self.Nodes)
+        maxLegs = 2 + len(self.nodes)
         # Build up a route
         for _ in range(maxLegs):
             PotentialNodesAndVals = dict()
@@ -234,10 +196,10 @@ class RoutingProblem:
                 nc = 0.0 if node_costs is None else node_costs[n]
                 a = (currNode, n)
                 # valid arc?
-                feasArc, new_time, _ = self.checkArc(time, load, a)
+                feas_arc, new_time, _ = self.check_arc(time, load, a)
                 tc = 0.0 if time_costs is None else time_costs(new_time)
-                if feasArc:
-                    stageCost = self.Arcs[a].getCost()
+                if feas_arc:
+                    stageCost = self.arcs[a].get_cost()
                     PotentialNodesAndVals[n] = stageCost + nc + tc + vf[n]
                 else:
                     continue
@@ -249,7 +211,7 @@ class RoutingProblem:
             try:
                 sampledNode, minNode = getSampledKey(PotentialNodesAndVals, explore)
                 a = (currNode, sampledNode)
-                feasArc, time, load = self.checkArc(time, load, a)
+                feas_arc, time, load = self.check_arc(time, load, a)
                 # Update value function estimate:
                 # ACTUAL minimizing cost-to-go: stageCost(a) + vf[minNode]
                 vf[currNode] = PotentialNodesAndVals[minNode]
@@ -260,12 +222,12 @@ class RoutingProblem:
                 break
             r.append(currNode)
             # if we have returned to the depot, we are done
-            if currNode == self.depotIndex:
+            if currNode == self.depot_index:
                 break
         # end loop over building up route
         return r, vf
 
-    def addRoute(self, route):
+    def add_route(self, route):
         """ If route is feasible, save its data
 
         args:
@@ -279,35 +241,24 @@ class RoutingProblem:
         """
         # If route r is feasible:
         #  cost = c_r
-        #  visitsNode[k] = \delta_k,r
+        #  visits_node[k] = \delta_k,r
         # However, with make_feasible heuristic, we might add nodes later
         # The route is just a list of indices, and doesn't need to know how
         #   many total node there are.
-        # However, visitsNode is an indicator array,
+        # However, visits_node is an indicator array,
         #   and will be the incorrect length if nodes are added.
         # Convert to a list of node indices as well
-        feas, cost, visitsNode = self.checkRoute(route)
-        visitsNode_indices = numpy.flatnonzero(visitsNode)
+        feas, cost, visits_node = self.check_route(route)
+        visits_node_indices = np.flatnonzero(visits_node)
         added = False
         if feas and route not in self.routes:
             self.routes.append(list(route))
             self.route_costs.append(cost)
-            self.route_node_visited.append(visitsNode_indices)
+            self.route_node_visited.append(visits_node_indices)
             added = True
         return feas, added
 
-    def estimate_max_vehicles(self):
-        """ Estimate maximum number of vehicles based on degree of depot node in graph """
-        num_outgoing = 0
-        num_incoming = 0
-        for arc in self.Arcs.keys():
-            if arc[0] == self.depotIndex:
-                num_outgoing += 1
-            if arc[1] == self.depotIndex:
-                num_incoming += 1
-        return min(num_outgoing, num_incoming)
-
-    def addRoutes_better(self, explore, node_costs, time_costs):
+    def add_routes_better(self, explore, node_costs, time_costs):
         """ Add routes in a more constructive way
 
         args:
@@ -323,20 +274,20 @@ class RoutingProblem:
             this construction heuristic
         """
         num_vehicles = self.estimate_max_vehicles()
-        unvisited_indices = list(range(len(self.Nodes)))
+        unvisited_indices = list(range(len(self.nodes)))
         routes = []
 
         # The number of routes that can be added is limited by the number of vehicles
         for _ in range(num_vehicles):
-            r, _ = self.generateRoute(None, explore, node_costs, time_costs, unvisited_indices)
-            feas, _ = self.addRoute(r)
+            r, _ = self.generate_route(None, explore, node_costs, time_costs, unvisited_indices)
+            feas, _ = self.add_route(r)
             if not feas:
                 continue
             # else, route is feasible/valid,
             # whether or not it was added, update unvisited indices
             routes.append(r)
             for n in r:
-                if n == self.depotIndex:
+                if n == self.depot_index:
                     continue
                 unvisited_indices.remove(n)
         # end loop
@@ -344,94 +295,91 @@ class RoutingProblem:
 
     def make_feasible(self, high_cost):
         """
-        Some sort of greedy construction heuristic to make sure the problem is 
+        Some sort of greedy construction heuristic to make sure the problem is
         feasible. We add dummy node/arcs as necessary to emulate more
         vehicles being available.
         """
         # Add routes greedily (no/little exploration),
         # but keep the list of unvisited nodes.
-        exit_penalty = numpy.max(self.route_costs)
+        exit_penalty = np.max(self.route_costs)
         time_penalty = 10
-        node_costs = [0]*len(self.Nodes)
-        node_costs[self.depotIndex] = exit_penalty
+        node_costs = [0]*len(self.nodes)
+        node_costs[self.depot_index] = exit_penalty
         time_costs = lambda t: time_penalty*t
-        unvisited_indices, routes = self.addRoutes_better(0, node_costs, time_costs)
-        unvisited_indices.remove(self.depotIndex)
+        unvisited_indices, routes = self.add_routes_better(0, node_costs, time_costs)
+        unvisited_indices.remove(self.depot_index)
 
         # Add arcs and construct routes through the nodes that remain unvisited
         # Note that we will add a node, which also adds a new CONSTRAINT to the
         # problem - but the constructed route will automatically satisfy the new
         # constraint.
         # Make new arcs as costly as most expensive (regular) route
-        # high_cost = numpy.max(self.route_costs)
-        depot_name = self.NodeNames[self.depotIndex]
+        # high_cost = np.max(self.route_costs)
+        depot_name = self.node_names[self.depot_index]
         for u in unvisited_indices:
             # Add arcs and a route through the unvisited node;
             # to be a valid arc/route, the loading constraints must be satisfied
-            # (see checkArc)
+            # (see check_arc)
             # Add a dummy node to ensure loading is satisfied
-            # initial + new_node + unvisited \in [0, vehicleCap]
-            loading = self.initial_loading + self.Nodes[u].getLoad()
+            # initial + new_node + unvisited \in [0, vehicle_cap]
+            loading = self.initial_loading + self.nodes[u].get_load()
             if loading < 0:
                 new_node_loading = -loading
-            elif loading > self.vehicleCap:
-                new_node_loading = self.vehicleCap - loading
+            elif loading > self.vehicle_cap:
+                new_node_loading = self.vehicle_cap - loading
             else:
                 new_node_loading = 0
-            logger.debug("Unvisited node: {}, loading: {}".format(
-                                self.NodeNames[u], self.Nodes[u].getLoad()
-                            )
-                        )
-            new_node = "mf_Dum_{}".format(u)
+            logger.debug(f"Unvisited node: {self.node_names[u]}, "+\
+                         f"loading: {self.nodes[u].get_load()}")
+            new_node = f"mf_Dum_{u}"
             # Add node - remember, node is defined by DEMAND = -LOADING
-            self.addNode(new_node, -new_node_loading)
-            new_node_index = self.NodeNames.index(new_node)
+            self.add_node(new_node, -new_node_loading)
+            new_node_index = self.node_names.index(new_node)
             # Add arcs and route through unvisited node
             # cost of route will be (at least?) twice high_cost
-            self.addArc(depot_name, new_node, 0, high_cost)
-            self.addArc(new_node, self.NodeNames[u], 0, high_cost)
+            self.add_arc(depot_name, new_node, 0, high_cost)
+            self.add_arc(new_node, self.node_names[u], 0, high_cost)
             # do we need an arc from the unvisited node?
             try:
-                self.Arcs[(u, self.depotIndex)]
-            except:
-                self.addArc(self.NodeNames[u], depot_name, 0, 0)
-            r = [self.depotIndex, new_node_index, u, self.depotIndex]
+                self.arcs[(u, self.depot_index)]
+            except KeyError:
+                self.add_arc(self.node_names[u], depot_name, 0, 0)
+            r = [self.depot_index, new_node_index, u, self.depot_index]
             routes.append(r)
-            feas, _ = self.addRoute(r)
-            logger.info("New feasibility route: {}".format(r))
+            feas, _ = self.add_route(r)
+            logger.info(f"New feasibility route: {r}")
             assert feas, "Something not right in make_feasible"
 
         # construct and save feasible solution
-        feas_sol = numpy.zeros(len(self.route_costs))
+        feas_sol = np.zeros(len(self.route_costs))
         for r in routes:
             i = self.routes.index(r)
             feas_sol[i] = 1
         self.feasible_solution = feas_sol
         return
 
-    def getBLECdata(self):
+    def get_math_program_data(self):
         """
-        Transform problem data into the cost vector, constraint matrix and rhs
-        of the Binary Linear Equality Constrained (BLEC) problem
+        Get the data of an integer linear program formulation of the problem
         """
-        num_nodes = len(self.Nodes)
+        num_nodes = len(self.nodes)
         num_vars = len(self.route_costs)
-        blec_cost = numpy.array(self.route_costs)
+        mp_cost = np.array(self.route_costs)
         # constraints are: visit all nodes (EXCEPT depot) exactly once
         # route_node_visited is a list of the nodes each route visits;
         # use this to construct constraint matrix sparsely,
         # then get rid of row corresponding to depot
-        blec_constraints_rhs = numpy.ones(num_nodes - 1)
-        blec_constraints_matrix = numpy.zeros((num_nodes, num_vars))
+        mp_constraints_rhs = np.ones(num_nodes - 1)
+        mp_constraints_matrix = np.zeros((num_nodes, num_vars))
         for j, node_indices in enumerate(self.route_node_visited):
-            col_indices = j*numpy.ones(len(node_indices), dtype=int)
-            blec_constraints_matrix[node_indices, col_indices] = 1
-        mask = numpy.ones(num_nodes, dtype=bool)
-        mask[self.depotIndex] = False
-        blec_constraints_matrix = blec_constraints_matrix[mask, :]
-        return blec_cost, blec_constraints_matrix, blec_constraints_rhs
+            col_indices = j*np.ones(len(node_indices), dtype=int)
+            mp_constraints_matrix[node_indices, col_indices] = 1
+        mask = np.ones(num_nodes, dtype=bool)
+        mask[self.depot_index] = False
+        mp_constraints_matrix = mp_constraints_matrix[mask, :]
+        return mp_cost, mp_constraints_matrix, mp_constraints_rhs
 
-    def getConstraintData(self):
+    def get_constraint_data(self):
         """
         Return constraints in a consistent way
         A_eq * x = b_eq
@@ -446,12 +394,12 @@ class RoutingProblem:
                 (potentially all zeros if there are no nontrivial quadratic constraints)
             r_eq (float): Right-hand side of the quadratic constraint
         """
-        _, A_eq, b_eq = self.getBLECdata()
-        n = self.getNumVariables()
+        _, A_eq, b_eq = self.get_math_program_data()
+        n = self.get_num_variables()
         return A_eq, b_eq, sparse.csr_matrix((n,n)), 0
 
 
-    def getQUBO(self, penalty_parameter=None, feasibility=False):
+    def get_qubo(self, penalty_parameter=None, feasibility=False):
         """ Get the Quadratic Unconstrained Binary Optimization problem reformulation of the BLEC
 
         args:
@@ -470,17 +418,17 @@ class RoutingProblem:
             penalty_parameter = 1
         else:
             # do exact penalty; look at L1 norm of cost vector
-            sufficient_pp = numpy.sum(numpy.abs(self.route_costs))
+            sufficient_pp = np.sum(np.abs(self.route_costs))
             if penalty_parameter is None:
                 penalty_parameter = sufficient_pp + 1.0
             if penalty_parameter <= sufficient_pp:
-                logger.info(
-                    "Penalty parameter might not be big enough...(>{})".format(sufficient_pp))
+                logger.warning(
+                    f"Penalty parameter might not be big enough...(>{sufficient_pp})")
 
-        # num_nodes = len(self.Nodes)
+        # num_nodes = len(self.nodes)
         num_vars = len(self.route_costs)
 
-        _, blec_constraints_matrix, blec_constraints_rhs = self.getBLECdata()
+        _, mp_constraints_matrix, mp_constraints_rhs = self.get_math_program_data()
 
         # according to scipy.sparse documentation,
         # (https://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.coo_matrix.html#scipy.sparse.coo_matrix)
@@ -492,17 +440,17 @@ class RoutingProblem:
 
         if not feasibility:
             # Linear objective terms:
-            for i in range(len(self.route_costs)):
-                if self.route_costs[i] != 0:
+            for i, cost in enumerate(self.route_costs):
+                if cost != 0:
                     qrow.append(i)
                     qcol.append(i)
-                    qval.append(self.route_costs[i])
+                    qval.append(cost)
 
         # Linear Equality constraints as penalty:
         # rho*||Ax - b||^2 = rho*( x^T (A^T A) x - 2b^T A x + b^T b )
 
         # Put -2b^T A on the diagonal:
-        TwoBTA = -2 * blec_constraints_matrix.transpose().dot(blec_constraints_rhs)
+        TwoBTA = -2 * mp_constraints_matrix.transpose().dot(mp_constraints_rhs)
         for i in range(num_vars):
             if TwoBTA[i] != 0:
                 qrow.append(i)
@@ -511,17 +459,17 @@ class RoutingProblem:
 
         # Construct the QUBO objective matrix so far
         # Convert to ndarray, because if we add a dense matrix to it,
-        # the result is a numpy.matrix, which is potentially deprecated
+        # the result is a np.matrix, which is potentially deprecated
         Q = sparse.coo_matrix((qval, (qrow, qcol))).toarray()
 
         # Add A^T A to it
         # This will be a ndarray
-        Q = Q + penalty_parameter * blec_constraints_matrix.transpose().dot(blec_constraints_matrix)
+        Q = Q + penalty_parameter * mp_constraints_matrix.transpose().dot(mp_constraints_matrix)
         # constant term of QUBO objective
-        constant = penalty_parameter * blec_constraints_rhs.dot(blec_constraints_rhs)
+        constant = penalty_parameter * mp_constraints_rhs.dot(mp_constraints_rhs)
         return Q, constant
 
-    def getCplexProb(self):
+    def get_cplex_prob(self):
         """ Get a CPLEX object containing the BLEC/MIP representation
 
         args:
@@ -533,49 +481,35 @@ class RoutingProblem:
         cplex_prob = cplex.Cplex()
 
         # Get BLEC/MIP data (but convert to lists for CPLEX)
-        blec_cost, blec_constraints_matrix, blec_constraints_rhs = self.getBLECdata()
+        mp_cost, mp_constraints_matrix, mp_constraints_rhs = self.get_math_program_data()
         # Variables: all binary
         # constraints: all equality
-        var_types = [cplex_prob.variables.type.binary] * len(blec_cost)
-        con_types = ['E'] * len(blec_constraints_rhs)
-        (rows, cols) = numpy.nonzero(blec_constraints_matrix)
-        vals = blec_constraints_matrix[(rows, cols)]
+        var_types = [cplex_prob.variables.type.binary] * len(mp_cost)
+        con_types = ['E'] * len(mp_constraints_rhs)
+        (rows, cols) = np.nonzero(mp_constraints_matrix)
+        vals = mp_constraints_matrix[(rows, cols)]
         rows = rows.tolist()
         cols = cols.tolist()
         vals = vals.tolist()
 
         # Variable names: node index sequence
         # Given a route (a list of indices), convert to a single string of those indices
-        route_namer = lambda r: 'r_' + '_'.join(map(lambda i: '{}'.format(i), r))
+        route_namer = lambda r: 'r_' + '_'.join(map(lambda i: f'{i}', r))
         vnames = list(map(route_namer, self.routes))
         # Constraint names: name after node index
-        cnames = list(map(lambda i: 'cNode_{}'.format(i), range(len(self.Nodes))))
-        cnames.pop(self.depotIndex)
+        cnames = list(map(lambda i: f"cNode_{i}", range(len(self.nodes))))
+        cnames.pop(self.depot_index)
 
         # define object
         cplex_prob.objective.set_sense(cplex_prob.objective.sense.minimize)
-        cplex_prob.variables.add(obj=blec_cost.tolist(), types=var_types, names=vnames)
-        cplex_prob.linear_constraints.add(rhs=blec_constraints_rhs.tolist(), senses=con_types,
+        cplex_prob.variables.add(obj=mp_cost.tolist(), types=var_types, names=vnames)
+        cplex_prob.linear_constraints.add(rhs=mp_constraints_rhs.tolist(), senses=con_types,
                                           names=cnames)
         cplex_prob.linear_constraints.set_coefficients(zip(rows, cols, vals))
         return cplex_prob
 
-    def export_mip(self, filename=None):
-        """ Export BLEC/MIP representation of problem """
-        if filename is None:
-            filename = 'path_based_rp.lp'
-        cplex_prob = self.getCplexProb()
-        cplex_prob.write(filename)
-        return
 
-    def solveCplexProb(self, filename_sol='cplex.sol'):
-        cplex_prob = self.getCplexProb()
-        cplex_prob.solve()
-        cplex_prob.solution.write(filename_sol)
-        return
-
-
-def getSampledKey(KeyVal, explore):
+def getSampledKey(key_val, explore):
     """ Sample the keys of a dictionary inversely proportional to the real values
 
     The idea is to transform the values into a probability distribution with probability inversely
@@ -588,88 +522,23 @@ def getSampledKey(KeyVal, explore):
         explore = np.inf : gives more randomization/exploration  (makes LESS sensitive to scale)
 
     return:
-    sampledKey: A (potentially randomly) sampled key of the dictionary
-    minimumKey: The key corresponding to the actual minimum value
+    sampled_key: A (potentially randomly) sampled key of the dictionary
+    minimum_key: The key corresponding to the actual minimum value
     """
-    assert KeyVal, 'Dictionary to sample is empty'
+    assert key_val, 'Dictionary to sample is empty'
     assert explore >= 0, 'explore must be non-negative'
 
     # Get and return true minimum anyway
-    minimumKey = min(KeyVal, key=KeyVal.get)
+    minimum_key = min(key_val, key=key_val.get)
 
     # Sample keys according to probabilities obtained from softmax,
     # using appropriate scaling
-    scaled_vals = -numpy.fromiter(KeyVal.values(), dtype=float) / (1e-4 + explore)
+    scaled_vals = -np.fromiter(key_val.values(), dtype=float) / (1e-4 + explore)
     pmf = softmax(scaled_vals)
     try:
-        sampledKey = numpy.random.choice(list(KeyVal.keys()), p=pmf)
-    except(ValueError):
+        sampled_key = np.random.choice(list(key_val.keys()), p=pmf)
+    except ValueError:
         # make sure pmf is really a pmf
-        pmf /= numpy.sum(pmf)
-        sampledKey = numpy.random.choice(list(KeyVal.keys()), p=pmf)
-    return sampledKey, minimumKey
-
-
-class Node:
-    """
-    A node is a customer, with a demand level that must be satisfied in a particular window of time.
-    Here, the sign convention for demand is from the perspective of the node:
-        positive demand must be delivered,
-        negative demand is supply that must be picked up.
-    """
-
-    def __init__(self, name, demand, TW):
-        assert TW[0] <= TW[1], 'Time window for {} not valid: {} > {}'.format(name, TW[0], TW[1])
-        self.name = name
-        self.demand = demand
-        self.tw = TW
-
-    def getName(self):
-        return self.name
-
-    def getDemand(self):
-        """ Return the demand level of the node """
-        return self.demand
-
-    def getLoad(self):
-        """
-        Return what is loaded onto/off a vehicle servicing this node
-        (i.e., load is negative demand)
-        """
-        return -self.demand
-
-    def getWindow(self):
-        """ Return the time window (a, b) of the node """
-        return self.tw
-
-    def __str__(self):
-        return "{}: {} in {}".format(self.name, self.demand, self.tw)
-
-
-class Arc:
-    """
-    An arc goes from one node to another (distinct) node
-    It has an associated travel time, and potentially a cost
-    """
-
-    def __init__(self, From, To, TravelTime, Cost):
-        assert From is not To, 'Arc endpoints must be distinct'
-        self.origin = From
-        self.destination = To
-        self.traveltime = TravelTime
-        self.cost = Cost
-
-    def getO(self):
-        return self.origin
-
-    def getD(self):
-        return self.destination
-
-    def getTravelTime(self):
-        return self.traveltime
-
-    def getCost(self):
-        return self.cost
-
-    def __str__(self):
-        return "{} to {}, t={:.2f}".format(self.origin.name, self.destination.name, self.traveltime)
+        pmf /= np.sum(pmf)
+        sampled_key = np.random.choice(list(key_val.keys()), p=pmf)
+    return sampled_key, minimum_key
