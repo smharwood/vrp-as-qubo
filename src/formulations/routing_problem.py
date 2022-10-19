@@ -3,7 +3,7 @@ SM Harwood
 16 October 2022
 """
 import numpy as np
-from vrptw import VRPTW
+from .vrptw import VRPTW
 
 class RoutingProblem:
     """
@@ -54,18 +54,26 @@ class RoutingProblem:
         return self.vrptw.initial_loading
 
     def set_vehicle_cap(self, vehicle_cap):
+        """ Set the capacity of the vehicles """
         return self.vrptw.set_vehicle_cap(vehicle_cap)
 
     def set_initial_loading(self, loading):
+        """ Set the load size of vehicles when they leave the depot """
         return self.vrptw.set_initial_loading(loading)
 
     def add_node(self, node_name, demand, t_w=(0, np.inf)):
+        """
+        Add a node to the problem,
+        with demand level `demand` and time window `t_w`
+        """
         return self.vrptw.add_node(node_name, demand, t_w)
 
     def get_node_index(self, node_name):
+        """ Get the index of the node `node_name` """
         return self.vrptw.get_node_index(node_name)
 
     def get_node(self, node_name):
+        """ Get the node `node_name` """
         return self.vrptw.get_node(node_name)
 
     def set_depot(self, depot_name):
@@ -151,9 +159,10 @@ class RoutingProblem:
         cplex_prob.write(filename)
         return
 
-    def solve_cplex_prob(self, filename_sol="cplex.sol"):
+    def solve_cplex_prob(self, soln_fn=None):
         """ Solve constrained integer formulation with CPLEX """
         cplex_prob = self.get_cplex_prob()
         cplex_prob.solve()
-        cplex_prob.solution.write(filename_sol)
-        return
+        if soln_fn is not None:
+            cplex_prob.solution.write(soln_fn)
+        return cplex_prob.solution.get_values()

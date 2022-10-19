@@ -12,6 +12,11 @@ class VRPTW:
     A class to organize the basic data of a
     Vehicle Routing Problem with Time Windows (VRPTW)
     This includes the graph structure of the problem and vehicle sizing.
+
+    This formulation of the problem is based on
+    M. Desrochers, J. Desrosiers, and M. Solomon, "A new optimization algorithm
+    for the vehicle routing problem with time windows"
+    https://doi.org/10.1287/opre.40.2.342
     """
     def __init__(self):
         self.node_names = []

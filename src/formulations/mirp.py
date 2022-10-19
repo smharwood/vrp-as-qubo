@@ -4,10 +4,10 @@ SM Harwood
 """
 from itertools import product
 import numpy as np
-from vrptw import VRPTW
-from arc_based_rp import ArcBasedRoutingProblem
-from path_based_rp import PathBasedRoutingProblem
-from sequence_based_rp import SequenceBasedRoutingProblem
+from .vrptw import VRPTW
+from .arc_based_rp import ArcBasedRoutingProblem
+from .path_based_rp import PathBasedRoutingProblem
+from .sequence_based_rp import SequenceBasedRoutingProblem
 
 class MIRP:
     """
@@ -217,12 +217,12 @@ class MIRP:
         Look at the port that must be visited the most often, then multiply the
         number of times it must be visited by twice the most expensive arc cost
         """
-        most_freq = min(self.port_frequency, key=self.port_frequency.get)
+        most_freq = min(self.port_frequency.values())
         most_trips = self.time_horizon/most_freq
         costs = [arc.get_cost() for arc in self.vrptw.arcs.values()]
         return 2*max(costs)*most_trips
 
-    def get_arc_based(self, make_feasible):
+    def get_arc_based(self, make_feasible=True):
         """
         Return the arc-based routing problem object
         Build if necessary, including defining the time periods in some way
@@ -254,7 +254,7 @@ class MIRP:
             self.abrp.make_feasible(high_cost)
         return self.abrp
 
-    def get_path_based(self, make_feasible):
+    def get_path_based(self, make_feasible=True):
         """
         Return the path-based routing problem object
         Build if necessary, including constructing routes
@@ -285,7 +285,7 @@ class MIRP:
             self.pbrp.make_feasible(high_cost)
         return self.pbrp
 
-    def get_sequence_based(self, make_feasible):
+    def get_sequence_based(self, make_feasible=True):
         """
         Return the sequence-based routing problem object
         Build if necessary, including setting number of vehicles and sequence numbers
