@@ -149,7 +149,7 @@ class Arc:
     """
     def __init__(self, origin, destination, travel_time, cost):
         """Define Arc by origin and destination Nodes and time/cost"""
-        assert origin is not destination, "Arc endpoints must be distinct"
+        #assert origin is not destination, "Arc endpoints must be distinct"
         self.origin = origin
         self.destination = destination
         self.travel_time = travel_time

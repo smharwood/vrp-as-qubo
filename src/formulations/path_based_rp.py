@@ -3,6 +3,7 @@ SM Harwood
 16 October 2022
 """
 import logging
+from copy import deepcopy
 import numpy as np
 from scipy import sparse
 from scipy.special import softmax
@@ -138,12 +139,12 @@ class PathBasedRoutingProblem(RoutingProblem):
         time += arc.get_travel_time()
         time = max(time, dest.get_window()[0])
         if time > dest.get_window()[1]:
-            logger.debug(f"arc {arc_key}: time window bad")
+            logger.debug(f"Check arc {arc_key}: time window bad")
             return False, time, load
         # Is the load physical (nonnegative and within capacity)?
         load += dest.get_load()
         if load > self.vehicle_cap or load < 0:
-            logger.debug(f"arc {arc_key}: capacity bad")
+            logger.debug(f"Check arc {arc_key}: capacity bad")
             return False, time, load
         return True, time, load
 
@@ -316,6 +317,10 @@ class PathBasedRoutingProblem(RoutingProblem):
         # Make new arcs as costly as most expensive (regular) route
         # high_cost = np.max(self.route_costs)
         depot_name = self.node_names[self.depot_index]
+        if len(unvisited_indices) > 0:
+            # If we have to modufy the graph, make a copy in case the VRPTW object
+            # is shared among different formulations
+            self.vrptw = deepcopy(self.vrptw)
         for u in unvisited_indices:
             # Add arcs and a route through the unvisited node;
             # to be a valid arc/route, the loading constraints must be satisfied
@@ -508,6 +513,13 @@ class PathBasedRoutingProblem(RoutingProblem):
         cplex_prob.linear_constraints.set_coefficients(zip(rows, cols, vals))
         return cplex_prob
 
+    def get_routes(self, solution):
+        """ Get the list of list of nodes corresponding to a solution """
+        soln_var_indices = np.flatnonzero(solution)
+        routes = []
+        for i in soln_var_indices:
+            routes.append(self.get_route_names(self.routes[i]))
+        return routes
 
 def get_sampled_key(key_val, explore):
     """ Sample the keys of a dictionary inversely proportional to the real values

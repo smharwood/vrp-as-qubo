@@ -3,8 +3,11 @@ SM Harwood
 19 October 2022
 """
 import sys
+import logging
 sys.path.append("..")
 from formulations.path_based_rp import get_sampled_key as sampler
+
+logging.basicConfig(level=logging.DEBUG)
 
 def test(explore=1):
     """ Test sampler in path_based_rp """

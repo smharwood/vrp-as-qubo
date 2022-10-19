@@ -35,6 +35,9 @@ class SequenceBasedRoutingProblem(RoutingProblem):
             causing infeasible problems.
         """
         super().__init__(vrptw)
+        #TODO:
+        # if vrptw is not None and strict is True, we need to copy the object
+        # and follow derived add_arc logic
         self.strict = strict
         self.max_sequence_length = 0
         self.max_vehicles = 0
@@ -724,39 +727,39 @@ class SequenceBasedRoutingProblem(RoutingProblem):
                 prev_node = curr_node
         return routes
 
-    def print_objective(self):
-        """Just display the sparse matrix encoding linear/bilinear terms in a nice way"""
-        print("Linear terms:")
-        for i in range(self.get_num_variables()):
-            (vi,si,ni) = self.get_var_tuple_index(i)
-            print("v{}, s{}, {}: {}".format(vi,si,self.node_names[ni], self.objective_c[i]))
+    # def print_objective(self):
+    #     """Just display the sparse matrix encoding linear/bilinear terms in a nice way"""
+    #     print("Linear terms:")
+    #     for i in range(self.get_num_variables()):
+    #         (vi,si,ni) = self.get_var_tuple_index(i)
+    #         print("v{}, s{}, {}: {}".format(vi,si,self.node_names[ni], self.objective_c[i]))
 
-        print("Quadratic terms:")
-        for (r,c,val) in zip(self.objective_q.row,self.objective_q.col,self.objective_q.data):
-            (vi,si,ni) = self.get_var_tuple_index(r)            
-            (vj,sj,nj) = self.get_var_tuple_index(c)
-            print("(v{}, s{}, {}) -- (v{}, s{}, {}) : {}".format(
-                    vi,si,self.node_names[ni], vj,sj,self.node_names[nj], val))
+    #     print("Quadratic terms:")
+    #     for (r,c,val) in zip(self.objective_q.row,self.objective_q.col,self.objective_q.data):
+    #         (vi,si,ni) = self.get_var_tuple_index(r)            
+    #         (vj,sj,nj) = self.get_var_tuple_index(c)
+    #         print("(v{}, s{}, {}) -- (v{}, s{}, {}) : {}".format(
+    #                 vi,si,self.node_names[ni], vj,sj,self.node_names[nj], val))
 
-    def print_edge_penalty(self):
-        """Just display the sparse matrix encoding the edge penalty bi/linear terms in a nice way"""
-        print("Quadratic Edge Penalty terms:")
-        for (r,c,val) in zip(self.quadratic_constraints_matrix.row,
-                             self.quadratic_constraints_matrix.col,
-                             self.quadratic_constraints_matrix.data):
-            (vi,si,ni) = self.get_var_tuple_index(r)            
-            (vj,sj,nj) = self.get_var_tuple_index(c)
-            print("(v{}, s{}, {}) -- (v{}, s{}, {}) : (not allowed)".format(
-                    vi,si,self.node_names[ni], vj,sj,self.node_names[nj]))
+    # def print_edge_penalty(self):
+    #     """Just display the sparse matrix encoding the edge penalty bi/linear terms in a nice way"""
+    #     print("Quadratic Edge Penalty terms:")
+    #     for (r,c,val) in zip(self.quadratic_constraints_matrix.row,
+    #                          self.quadratic_constraints_matrix.col,
+    #                          self.quadratic_constraints_matrix.data):
+    #         (vi,si,ni) = self.get_var_tuple_index(r)            
+    #         (vj,sj,nj) = self.get_var_tuple_index(c)
+    #         print("(v{}, s{}, {}) -- (v{}, s{}, {}) : (not allowed)".format(
+    #                 vi,si,self.node_names[ni], vj,sj,self.node_names[nj]))
 
-    def print_qubo(self, Q=None):
-        """ Print QUBO matrix Q all pretty with var names """
-        if Q is None:
-            Q, _ = self.get_qubo()
+    # def print_qubo(self, Q=None):
+    #     """ Print QUBO matrix Q all pretty with var names """
+    #     if Q is None:
+    #         Q, _ = self.get_qubo()
 
-        Qcoo = Q.tocoo()
-        for (r,c,val) in zip(Qcoo.row,Qcoo.col,Qcoo.data):
-            (vi,si,ni) = self.get_var_tuple_index(r)            
-            (vj,sj,nj) = self.get_var_tuple_index(c)
-            print("(v{}, s{}, {}) -- (v{}, s{}, {}) : {}".format(
-                    vi,si,self.node_names[ni], vj,sj,self.node_names[nj], val))
+    #     Qcoo = Q.tocoo()
+    #     for (r,c,val) in zip(Qcoo.row,Qcoo.col,Qcoo.data):
+    #         (vi,si,ni) = self.get_var_tuple_index(r)            
+    #         (vj,sj,nj) = self.get_var_tuple_index(c)
+    #         print("(v{}, s{}, {}) -- (v{}, s{}, {}) : {}".format(
+    #                 vi,si,self.node_names[ni], vj,sj,self.node_names[nj], val))

@@ -26,11 +26,10 @@ def get_vrptw():
     vrp.add_node('D', 0, (0,np.inf))
     vrp.set_depot('D')
 
-    # Add nodes (Name, Time Window)
-    # Nodes have the same level of demand
-    vrp.add_node('1',(1,7))
-    vrp.add_node('2',(2,4))
-    vrp.add_node('3',(4,7))
+    # Add nodes (Name, Demand, Time Window)
+    vrp.add_node('1', 1, (1,7))
+    vrp.add_node('2', 2, (2,4))
+    vrp.add_node('3', 2, (4,7))
 
     # Add arcs (Origin, Destination, Time, Cost)
     vrp.add_arc('D','1', 1, 1)
