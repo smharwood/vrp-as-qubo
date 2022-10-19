@@ -494,9 +494,136 @@ class SequenceBasedRoutingProblem(RoutingProblem):
             self.feasible_solution[self.get_var_index(*seq)] = 1
         return
 
+    def get_constraint_data(self):
+        """
+        Return constraints in a consistent way
+        A_eq * x = b_eq
+        xᵀ * Q_eq * x = r_eq
+
+        Parameters:
+
+        Return:
+            A_eq (array): 2-d array of linear equality constraints
+            b_eq (array): 1-d array of right-hand side of equality constraints
+            Q_eq (array): 2-d array of a single quadratic equality constraint
+                (potentially all zeros if there are no nontrivial quadratic constraints)
+            r_eq (float): Right-hand side of the quadratic constraint
+        """
+        self.build_linear_constraints()
+        self.build_quadratic_constraints()
+        A_eq = self.linear_constraints_matrix
+        b_eq = self.linear_constraints_rhs
+        # Linearizing bilinear constraints is just too big
+        Q_eq = sparse.csr_matrix(self.quadratic_constraints_matrix)
+        r_eq = 0
+        # if anything is empty, make sure its dense
+        if len(b_eq) == 0:
+            A_eq = A_eq.toarray()
+        return A_eq, b_eq, Q_eq, r_eq
+
+    def get_sufficient_penalty(self,feasibility):
+        """
+        Get the threshhold value of penalty parameter for penalizing constraints
+        Actual penalty value must be STRICTLY GREATER than this
+        """
+        if feasibility:
+            sufficient_pp = 0.0
+        else:
+            sum_arc_cost = sum([np.fabs(arc.get_cost()) for arc in self.arcs.values()])
+            sufficient_pp = self.max_sequence_length*self.max_vehicles*sum_arc_cost
+        return sufficient_pp
+
+    def get_qubo(self, feasibility=False, penalty_parameter=None):
+        """
+        Get the Quadratic Unconstrained Binary Optimization problem reformulation
+
+        args:
+        feasibility (bool): Get the feasibility problem (ignore the objective)
+        penalty_parameter (float): value of penalty parameter to use for reformulation.
+            If None, it is determined automatically
+
+        Return:
+        Q (ndarray): Square matrix defining QUBO
+        c (float): a constant that makes the objective of the QUBO equal to the
+            objective value of the original constrained integer program
+        """
+        self.build_objective()
+        self.build_linear_constraints()
+        self.build_quadratic_constraints()
+
+        sufficient_pp = self.get_sufficient_penalty(feasibility)
+        if penalty_parameter is None:
+            penalty_parameter = sufficient_pp + 1.0
+        if penalty_parameter <= sufficient_pp:
+            logger.warning(
+                "Penalty parameter might not be big enough...(>{})".format(sufficient_pp))
+
+        qval = []
+        qrow = []
+        qcol = []
+
+        # according to scipy.sparse documentation,
+        # (https://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.coo_matrix.html#scipy.sparse.coo_matrix)
+        # Duplicated entries are merely summed to together when converting to an
+        # array or other sparse matrix type. This is consistent with our aim
+
+        if not feasibility:
+            # Linear objective terms:
+            for i in range(self.get_num_variables()):
+                if self.objective_c[i] != 0:
+                    qrow.append(i)
+                    qcol.append(i)
+                    qval.append(self.objective_c[i])
+            # Quadratic objective terms:
+            for (r,c,val) in zip(self.objective_q.row,
+                                 self.objective_q.col,
+                                 self.objective_q.data):
+                qrow.append(r)
+                qcol.append(c)
+                qval.append(val)
+
+        # Quadratic edge penalty terms:
+        for (r,c,val) in zip(self.quadratic_constraints_matrix.row,
+                             self.quadratic_constraints_matrix.col,
+                             self.quadratic_constraints_matrix.data):
+            qrow.append(r)
+            qcol.append(c)
+            qval.append(penalty_parameter*val)
+
+        # Linear Equality constraints:
+        # rho*||Ax - b||^2 = rho*( x^T (A^T A) x - 2b^T A x + b^T b )
+
+        # Put -2b^T A on the diagonal:
+        TwoBTA = -2*self.linear_constraints_matrix.transpose().dot(self.linear_constraints_rhs)
+        for i in range(self.get_num_variables()):
+            if TwoBTA[i] != 0:
+                qrow.append(i)
+                qcol.append(i)
+                qval.append(penalty_parameter*TwoBTA[i])
+
+        # Construct the QUBO objective matrix so far
+        Q = sparse.coo_matrix((qval,(qrow,qcol)))
+
+        # Add A^T A to it
+        # This will be some sparse matrix (probably CSR format)
+        Q = Q + penalty_parameter*self.linear_constraints_matrix.transpose().dot(
+            self.linear_constraints_matrix
+        )
+
+        # constant term of QUBO objective
+        constant = penalty_parameter*self.linear_constraints_rhs.dot(self.linear_constraints_rhs)
+        return Q, constant
+
     def get_cplex_prob(self):
         """
-        Get a CPLEX object containing the BLEC/MIP representation
+        Get a CPLEX object containing the original constrained integer program
+        representation
+
+        args:
+        None
+
+        Return:
+        cplex_prob (cplex.Cplex): A CPLEX object defining the MIP problem
         """
         self.build_objective()
         self.build_linear_constraints()
@@ -556,140 +683,6 @@ class SequenceBasedRoutingProblem(RoutingProblem):
 #        vals = complete_q.data.tolist()
 #        cplex_prob.objective.set_quadratic_coefficients(zip(rows,cols,vals))
         return cplex_prob
-
-    def get_sufficient_penalty(self,feasibility):
-        """
-        Get the threshhold value of penalty parameter for penalizing constraints
-        Actual penalty value must be STRICTLY GREATER than this
-        """
-        if feasibility:
-            sufficient_pp = 0.0
-        else:
-            sum_arc_cost = sum([np.fabs(arc.get_cost()) for arc in self.arcs.values()])
-            sufficient_pp = self.max_sequence_length*self.max_vehicles*sum_arc_cost
-        return sufficient_pp
-
-    def get_constraint_data(self):
-        """
-        Return constraints in a consistent way
-        A_eq * x = b_eq
-        xᵀ * Q_eq * x = r_eq
-
-        Parameters:
-
-        Return:
-            A_eq (array): 2-d array of linear equality constraints
-            b_eq (array): 1-d array of right-hand side of equality constraints
-            Q_eq (array): 2-d array of a single quadratic equality constraint
-                (potentially all zeros if there are no nontrivial quadratic constraints)
-            r_eq (float): Right-hand side of the quadratic constraint
-        """
-        self.build_linear_constraints()
-        self.build_quadratic_constraints()
-        A_eq = self.linear_constraints_matrix
-        b_eq = self.linear_constraints_rhs
-        # # as in get_cplex_prob, linearize bilinear constraints
-        # # x_i * x_j = 0
-        # # <==>
-        # # x_i + x_j <= 1 (when vars are binary)
-        # row = []
-        # col = []
-        # val = []
-        # rhs = []
-        # for k in range(self.objective_q.nnz):
-        #     # for each nonzero (bilinear) term
-        #     # we have an inequality constraint (a new row)
-        #     # and two nonzero entries in that row
-        #     row.append(k)
-        #     col.append(self.objective_q.row[k])
-        #     val.append(1.0)
-        #     row.append(k)
-        #     col.append(self.objective_q.col[k])
-        #     val.append(1.0)
-        #     rhs.append(1.0)
-        # n = self.get_num_variables()
-        Q_eq = sparse.csr_matrix(self.quadratic_constraints_matrix)
-        r_eq = 0
-        # if anything is empty, make sure its dense
-        if len(b_eq) == 0:
-            A_eq = A_eq.toarray()
-        return A_eq, b_eq, Q_eq, r_eq
-
-    def get_qubo(self, penalty_parameter=None, feasibility=False):
-        """
-        Get the Quadratic Unconstrained Binary Optimization problem
-        reformulation of the constrained math program
-        penalty_parameter : value of penalty parameter to use for reformulation
-            Default: None (determined by arc costs)
-        feasibility : define feasibility problem only
-            Default: False
-        """
-        self.build_objective()
-        self.build_linear_constraints()
-        self.build_quadratic_constraints()
-
-        sufficient_pp = self.get_sufficient_penalty(feasibility)
-        if penalty_parameter is None:
-            penalty_parameter = sufficient_pp + 1.0
-        if penalty_parameter <= sufficient_pp:
-            logger.warning(
-                "Penalty parameter might not be big enough...(>{})".format(sufficient_pp))
-
-        qval = []
-        qrow = []
-        qcol = []
-
-        # according to scipy.sparse documentation,
-        # (https://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.coo_matrix.html#scipy.sparse.coo_matrix)
-        # Duplicated entries are merely summed to together when converting to an
-        # array or other sparse matrix type. This is consistent with our aim
-    
-        if not feasibility:
-            # Linear objective terms:
-            for i in range(self.get_num_variables()):
-                if self.objective_c[i] != 0:
-                    qrow.append(i)
-                    qcol.append(i)
-                    qval.append(self.objective_c[i])
-            # Quadratic objective terms:
-            for (r,c,val) in zip(self.objective_q.row,
-                                 self.objective_q.col,
-                                 self.objective_q.data):
-                qrow.append(r)
-                qcol.append(c)
-                qval.append(val)
-
-        # Quadratic edge penalty terms:
-        for (r,c,val) in zip(self.quadratic_constraints_matrix.row,
-                             self.quadratic_constraints_matrix.col,
-                             self.quadratic_constraints_matrix.data):
-            qrow.append(r)
-            qcol.append(c)
-            qval.append(penalty_parameter*val)
-
-        # Linear Equality constraints:
-        # rho*||Ax - b||^2 = rho*( x^T (A^T A) x - 2b^T A x + b^T b )
-
-        # Put -2b^T A on the diagonal:
-        TwoBTA = -2*self.linear_constraints_matrix.transpose().dot(self.linear_constraints_rhs)
-        for i in range(self.get_num_variables()):
-            if TwoBTA[i] != 0:
-                qrow.append(i)
-                qcol.append(i)
-                qval.append(penalty_parameter*TwoBTA[i])
-
-        # Construct the QUBO objective matrix so far
-        Q = sparse.coo_matrix((qval,(qrow,qcol)))
-
-        # Add A^T A to it
-        # This will be some sparse matrix (probably CSR format)
-        Q = Q + penalty_parameter*self.linear_constraints_matrix.transpose().dot(
-            self.linear_constraints_matrix
-        )
-
-        # constant term of QUBO objective
-        constant = penalty_parameter*self.linear_constraints_rhs.dot(self.linear_constraints_rhs)
-        return Q, constant
 
     def get_routes(self, solution):
         """

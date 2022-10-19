@@ -56,10 +56,11 @@ class ArcBasedRoutingProblem(RoutingProblem):
 
     def check_node_time_compat(self, node_index, time_point):
         """ is this node-time pair compatible? """
-        tw = self.nodes[node_index].get_window()
-        return tw[0] <= time_point <= tw[1]
+        t_w = self.nodes[node_index].get_window()
+        return t_w[0] <= time_point <= t_w[1]
 
     def enumerate_variables(self):
+        """ Enumerate/map the variables """
         if self.variables_enumerated:
             return
         start = time.time()
@@ -148,11 +149,12 @@ class ArcBasedRoutingProblem(RoutingProblem):
         """ number of variables in formulation """
         return self.num_variables
 
-    def get_var_index(self, ONodeIndex, OTimeIndex, DNodeIndex, DTimeIndex):
+    def get_var_index(self, node_1_index, time_1, node_2_index, time_2):
         """Get the unique id/index of the binary variable given the "tuple" indexing
-           Return of None means the tuple does not correspond to a variable """
+           Return of None means the tuple does not correspond to a variable
+        """
         try:
-            return self.var_mapping.index((ONodeIndex, OTimeIndex, DNodeIndex, DTimeIndex))
+            return self.var_mapping.index((node_1_index, time_1, node_2_index, time_2))
         except ValueError:
             return None
 
@@ -172,7 +174,7 @@ class ArcBasedRoutingProblem(RoutingProblem):
             return
 
         self.enumerate_variables()
-        # linear terms 
+        # linear terms
         self.objective = np.zeros(self.get_num_variables())
         for k in range(self.get_num_variables()):
             (i,s,j,t) = self.var_mapping[k]
@@ -181,6 +183,7 @@ class ArcBasedRoutingProblem(RoutingProblem):
         return
 
     def build_constraints(self):
+        """ Build all constraints of math program """
         if self.constraints_built:
             # Constraints already built
             return
@@ -205,7 +208,7 @@ class ArcBasedRoutingProblem(RoutingProblem):
         acol = []
         brhs = []
         row_index = 0
-        
+
         # Flow conservation constraints (for each (i,s))
         # EXCEPT DEPOT
         # see above- Depot is first in node list
@@ -234,7 +237,7 @@ class ArcBasedRoutingProblem(RoutingProblem):
             # sum_ist x_isjt = 1
             for i in range(len(self.nodes)):
                 for s in self.time_points:
-                    for t in self.time_points:   
+                    for t in self.time_points:
                         col = self.get_var_index(i,s,j,t)
                         if col is not None:
                             aval.append(1)
@@ -242,7 +245,7 @@ class ArcBasedRoutingProblem(RoutingProblem):
                             acol.append(col)
             # end construction of row entries
             brhs.append(1)
-            row_index += 1  
+            row_index += 1
 
         self.constraints_matrix = sparse.coo_matrix((aval,(arow,acol)))
         self.constraints_rhs = np.array(brhs)
@@ -263,7 +266,7 @@ class ArcBasedRoutingProblem(RoutingProblem):
         acol = []
         brhs = []
         row_index = 0
-        
+
         # Flow conservation constraints (for each (i,s))
         # EXCEPT DEPOT
         # see above- Depot is first in node list
@@ -298,7 +301,7 @@ class ArcBasedRoutingProblem(RoutingProblem):
                 aval.append(-1)
                 arow.append(row)
                 acol.append(col)
-            except(ValueError):
+            except ValueError:
                 pass
             # INflow:
             try:
@@ -306,7 +309,7 @@ class ArcBasedRoutingProblem(RoutingProblem):
                 aval.append(1)
                 arow.append(row)
                 acol.append(col)
-            except(ValueError):
+            except ValueError:
                 pass
 
         # Servicing/visitation constraints (for each j)
@@ -344,14 +347,14 @@ class ArcBasedRoutingProblem(RoutingProblem):
 
     def get_arrival_time(self, departure_time, arc):
         """ Get actual arrival time, leaving at <departure_time> on <arc>
-        
+
         Return:
             arrival_time (float): Arrival time
             in_time_points (bool): whether this arrival time is in time_points set
         """
         # Recall: cannot arrive before time window
-        TW = self.arcs[arc].get_destination().get_window()
-        arrival = max(TW[0], departure_time + self.arcs[arc].get_travel_time())
+        t_w = self.arcs[arc].get_destination().get_window()
+        arrival = max(t_w[0], departure_time + self.arcs[arc].get_travel_time())
         greater_time_points = (self.time_points >= arrival)
         if not any(greater_time_points):
             return arrival, False
@@ -389,12 +392,12 @@ class ArcBasedRoutingProblem(RoutingProblem):
                     arc = (current_node, n)
                     if self.check_arc(arc):
                         # this is a potentially allowed arc- need to check timing
-                        TW = self.nodes[n].get_window()
-                        arrival_actual, inTP = self.get_arrival_time(current_time, arc)
-                        if not inTP:
+                        t_w = self.nodes[n].get_window()
+                        arrival_actual, in_tp = self.get_arrival_time(current_time, arc)
+                        if not in_tp:
                             # arrival time is beyond current time_points
                             continue
-                        if arrival_actual <= min(TW[1], best_arrival):
+                        if arrival_actual <= min(t_w[1], best_arrival):
                             # this timing is valid AND we arrive earlier than all others yet
                             best_node = n
                             best_arrival = arrival_actual
@@ -412,8 +415,8 @@ class ArcBasedRoutingProblem(RoutingProblem):
                     self.check_and_add_exit_arc(current_node)
                     # Make sure that we can get back to depot with the discrete
                     # time points available
-                    arrival_actual, inTP = self.get_arrival_time(current_time, arc)
-                    if not inTP:
+                    arrival_actual, in_tp = self.get_arrival_time(current_time, arc)
+                    if not in_tp:
                         # if arrival time is not in time_points, add it in
                         self.time_points = np.append(self.time_points, arrival_actual)
                     used_arcs.append((current_node,current_time, 0,arrival_actual))
@@ -437,18 +440,18 @@ class ArcBasedRoutingProblem(RoutingProblem):
             added = self.add_arc(depot_nm, node_nm, 0, high_cost)
             assert added, "Something is wrong in construction heuristic"
             current_time = self.time_points[0]
-            arrival, inTP = self.get_arrival_time(current_time, arc)
+            arrival, in_tp = self.get_arrival_time(current_time, arc)
             # Since the arc we added has zero travel time, 
             # arrival time should be in time_points already...
-            assert inTP, f"Arriving at {arrival}: not in time_points??"
+            assert in_tp, f"Arriving at {arrival}: not in time_points??"
             used_arcs.append((0, current_time, n, arrival))
             current_time = arrival
 
             # Now, exit back to depot
             self.check_and_add_exit_arc(n, high_cost)
             arc = (n, 0)
-            arrival, inTP = self.get_arrival_time(current_time, arc)
-            assert inTP, f"Arriving at {arrival}: not in time_points??"
+            arrival, in_tp = self.get_arrival_time(current_time, arc)
+            assert in_tp, f"Arriving at {arrival}: not in time_points??"
             used_arcs.append((n, current_time, 0, arrival))
         # done fixing
 
@@ -476,10 +479,138 @@ class ArcBasedRoutingProblem(RoutingProblem):
             self.objective_built = False
         return
 
+    def get_constraint_data(self):
+        """
+        Return constraints in a consistent way
+        A_eq * x = b_eq
+        xᵀ * Q_eq * x = r_eq
+
+        Parameters:
+
+        Return:
+            A_eq (array): 2-d array of linear equality constraints
+            b_eq (array): 1-d array of right-hand side of equality constraints
+            Q_eq (array): 2-d array of a single quadratic equality constraint
+                (potentially all zeros if there are no nontrivial quadratic constraints)
+            r_eq (float): Right-hand side of the quadratic constraint
+        """
+        self.build_constraints()
+        A_eq = self.constraints_matrix
+        b_eq = self.constraints_rhs
+        n = self.get_num_variables()
+        # if anything is empty, make sure its dense
+        if len(b_eq) == 0:
+            A_eq = A_eq.toarray()
+        return A_eq, b_eq, sparse.csr_matrix((n,n)), 0
+
+    def get_qubo(self, feasibility=False, penalty_parameter=None):
+        """
+        Get the Quadratic Unconstrained Binary Optimization problem reformulation
+
+        args:
+        feasibility (bool): Get the feasibility problem (ignore the objective)
+        penalty_parameter (float): value of penalty parameter to use for reformulation.
+            If None, it is determined automatically
+
+        Return:
+        Q (ndarray): Square matrix defining QUBO
+        c (float): a constant that makes the objective of the QUBO equal to the
+            objective value of the original constrained integer program
+        """
+        self.build_objective()
+        self.build_constraints()
+
+        if feasibility:
+            penalty_parameter = 1.0
+        else:
+            sum_arc_cost = sum([np.fabs(arc.get_cost()) for arc in self.arcs.values()])
+            sufficient_pp = (len(self.time_points)**2)*sum_arc_cost
+            if penalty_parameter is None:
+                penalty_parameter = sufficient_pp + 1.0
+            if penalty_parameter <= sufficient_pp:
+                logger.warning(
+                    "Penalty parameter might not be big enough...(>{})".format(sufficient_pp))
+
+        qval = []
+        qrow = []
+        qcol = []
+
+        # according to scipy.sparse documentation,
+        # (https://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.coo_matrix.html#scipy.sparse.coo_matrix)
+        # Duplicated entries are merely summed to together when converting to an
+        # array or other sparse matrix type. This is consistent with our aim
+
+        # Linear objective terms:
+        if not feasibility:
+            for i in range(self.get_num_variables()):
+                if self.objective[i] != 0:
+                    qrow.append(i)
+                    qcol.append(i)
+                    qval.append(self.objective[i])
+
+        # Linear Equality constraints:
+        # rho * ||Ax - b||^2 = rho*( x^T (A^T A) x - 2b^T A x + b^T b )
+
+        # Put -2b^T A on the diagonal:
+        two_bta = -2*self.constraints_matrix.transpose().dot(self.constraints_rhs)
+        for i in range(self.get_num_variables()):
+            if two_bta[i] != 0:
+                qrow.append(i)
+                qcol.append(i)
+                qval.append(penalty_parameter*two_bta[i])
+
+        # Construct the QUBO objective matrix so far
+        Q = sparse.coo_matrix((qval,(qrow,qcol)),
+            shape=(self.get_num_variables(),self.get_num_variables())
+        )
+
+        # Add A^T A to it
+        # This will be some sparse matrix (probably CSR format)
+        Q = Q + penalty_parameter*self.constraints_matrix.transpose().dot(self.constraints_matrix)
+
+        # constant term of QUBO objective
+        constant = penalty_parameter*self.constraints_rhs.dot(self.constraints_rhs)
+
+        return Q, constant
+
+    def get_cplex_prob(self):
+        """
+        Get a CPLEX object containing the original constrained integer program
+        representation
+
+        args:
+        None
+
+        Return:
+        cplex_prob (cplex.Cplex): A CPLEX object defining the MIP problem
+        """
+        self.build_objective()
+        self.build_constraints()
+
+        cplex_prob = cplex.Cplex()
+
+        # Variables: all binary
+        # constraints: all equality
+        var_types = [cplex_prob.variables.type.binary] * len(self.objective)
+        namer = lambda isjt: "n{}t{}_n{}t{}".format(isjt[0], isjt[1], isjt[2], isjt[3])
+        names = list(map(namer, self.var_mapping))
+        con_types = ['E'] * len(self.constraints_rhs)
+        rows = self.constraints_matrix.row.tolist()
+        cols = self.constraints_matrix.col.tolist()
+        vals = self.constraints_matrix.data.tolist()
+
+        # define object
+        cplex_prob.objective.set_sense(cplex_prob.objective.sense.minimize)
+        cplex_prob.variables.add(obj=self.objective.tolist(), types=var_types, names=names)
+        cplex_prob.linear_constraints.add(rhs=self.constraints_rhs.tolist(), senses=con_types,
+            names=self.constraint_names)
+        cplex_prob.linear_constraints.set_coefficients(zip(rows, cols, vals))
+        return cplex_prob
+
     def get_routes(self, solution):
         """
         Get a representation of the paths/ vehicle routes in a solution
-        
+
         solution: binary vector corresponding to a solution
         """
         soln_var_indices = np.nonzero(solution)
@@ -519,115 +650,3 @@ class ArcBasedRoutingProblem(RoutingProblem):
         # end building all routes
         assert all(visited[1:] == 1), "Solution does not obey node visitation constraints"
         return routes
-
-    def get_cplex_prob(self):
-        """
-        Get a CPLEX object containing the BLEC/MIP representation
-        """
-        self.build_objective()
-        self.build_constraints()
-
-        cplex_prob = cplex.Cplex()
-
-        # Variables: all binary
-        # constraints: all equality
-        var_types = [cplex_prob.variables.type.binary] * len(self.objective)
-        namer = lambda isjt: "n{}t{}_n{}t{}".format(isjt[0], isjt[1], isjt[2], isjt[3])
-        names = list(map(namer, self.var_mapping))
-        con_types = ['E'] * len(self.constraints_rhs)
-        rows = self.constraints_matrix.row.tolist()
-        cols = self.constraints_matrix.col.tolist()
-        vals = self.constraints_matrix.data.tolist()
-
-        # define object
-        cplex_prob.objective.set_sense(cplex_prob.objective.sense.minimize)
-        cplex_prob.variables.add(obj=self.objective.tolist(), types=var_types, names=names)
-        cplex_prob.linear_constraints.add(rhs=self.constraints_rhs.tolist(), senses=con_types,
-            names=self.constraint_names)
-        cplex_prob.linear_constraints.set_coefficients(zip(rows, cols, vals))
-        return cplex_prob
-
-    def get_constraint_data(self):
-        """
-        Return constraints in a consistent way
-        A_eq * x = b_eq
-        xᵀ * Q_eq * x = r_eq
-
-        Parameters:
-
-        Return:
-            A_eq (array): 2-d array of linear equality constraints
-            b_eq (array): 1-d array of right-hand side of equality constraints
-            Q_eq (array): 2-d array of a single quadratic equality constraint
-                (potentially all zeros if there are no nontrivial quadratic constraints)
-            r_eq (float): Right-hand side of the quadratic constraint
-        """
-        self.build_constraints()
-        A_eq = self.constraints_matrix
-        b_eq = self.constraints_rhs
-        n = self.get_num_variables()
-        # if anything is empty, make sure its dense
-        if len(b_eq) == 0:
-            A_eq = A_eq.toarray()
-        return A_eq, b_eq, sparse.csr_matrix((n,n)), 0
-
-    def get_qubo(self, penalty_parameter=None, feasibility=False):
-        """
-        Get the Quadratic Unconstrained Binary Optimization problem
-        reformulation of the BLEC
-        penalty_parameter : value of penalty parameter to use for reformulation
-            Default: None (determined by arc costs)
-        """
-        self.build_objective()
-        self.build_constraints()
-
-        if feasibility:
-            penalty_parameter = 1.0
-        else:
-            sum_arc_cost = sum([np.fabs(arc.get_cost()) for arc in self.arcs.values()])
-            sufficient_pp = (len(self.time_points)**2)*sum_arc_cost
-            if penalty_parameter is None:
-                penalty_parameter = sufficient_pp + 1.0
-            if penalty_parameter <= sufficient_pp:
-                logger.warning(
-                    "Penalty parameter might not be big enough...(>{})".format(sufficient_pp))
-
-        qval = []
-        qrow = []
-        qcol = []
-
-        # according to scipy.sparse documentation,
-        # (https://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.coo_matrix.html#scipy.sparse.coo_matrix)
-        # Duplicated entries are merely summed to together when converting to an
-        # array or other sparse matrix type. This is consistent with our aim
-        
-        # Linear objective terms:
-        if not feasibility:
-            for i in range(self.get_num_variables()):
-                if self.objective[i] != 0:
-                    qrow.append(i)
-                    qcol.append(i)
-                    qval.append(self.objective[i])
-
-        # Linear Equality constraints:
-        # rho * ||Ax - b||^2 = rho*( x^T (A^T A) x - 2b^T A x + b^T b )
-
-        # Put -2b^T A on the diagonal:
-        TwoBTA = -2*self.constraints_matrix.transpose().dot(self.constraints_rhs)
-        for i in range(self.get_num_variables()):
-            if TwoBTA[i] != 0:
-                qrow.append(i)
-                qcol.append(i)
-                qval.append(penalty_parameter*TwoBTA[i])
-
-        # Construct the QUBO objective matrix so far
-        Q = sparse.coo_matrix((qval,(qrow,qcol)), shape=(self.get_num_variables(),self.get_num_variables()) )
-
-        # Add A^T A to it
-        # This will be some sparse matrix (probably CSR format)
-        Q = Q + penalty_parameter*self.constraints_matrix.transpose().dot(self.constraints_matrix)
-
-        # constant term of QUBO objective
-        constant = penalty_parameter*self.constraints_rhs.dot(self.constraints_rhs)
-
-        return Q, constant

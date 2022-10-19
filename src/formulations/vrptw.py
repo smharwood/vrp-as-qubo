@@ -13,7 +13,6 @@ class VRPTW:
     Vehicle Routing Problem with Time Windows (VRPTW)
     This includes the graph structure of the problem and vehicle sizing.
     """
-
     def __init__(self):
         self.node_names = []
         self.nodes = []
@@ -53,14 +52,14 @@ class VRPTW:
     def set_depot(self, depot_name):
         """ Take node named `depot_name` and move to first position in list """
         d_index = self.node_names.index(depot_name)
+        if not np.isinf(self.nodes[d_index].time_window[1]):
+            logger.warning("Consider making Depot time window infinite in size...")
         if d_index == 0:
             return
         depot = self.nodes.pop(d_index)
         self.node_names.remove(depot_name)
         self.nodes.insert(0, depot)
         self.node_names.insert(0, depot_name)
-        if not np.isinf(self.nodes[0].time_window[1]):
-            logger.warning("Consider making Depot time window infinite in size...")
         return
 
     def add_arc(self, origin_name, destination_name, travel_time, cost=0):

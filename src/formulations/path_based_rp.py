@@ -398,19 +398,19 @@ class PathBasedRoutingProblem(RoutingProblem):
         n = self.get_num_variables()
         return A_eq, b_eq, sparse.csr_matrix((n,n)), 0
 
-
-    def get_qubo(self, penalty_parameter=None, feasibility=False):
-        """ Get the Quadratic Unconstrained Binary Optimization problem reformulation of the BLEC
+    def get_qubo(self, feasibility=False, penalty_parameter=None):
+        """
+        Get the Quadratic Unconstrained Binary Optimization problem reformulation
 
         args:
-        penalty_parameter (float): value of penalty parameter to use for reformulation. If None, it
-            is determined automatically
         feasibility (bool): Get the feasibility problem (ignore the objective)
+        penalty_parameter (float): value of penalty parameter to use for reformulation.
+            If None, it is determined automatically
 
         Return:
         Q (ndarray): Square matrix defining QUBO
-        c (float): a constant that makes the objective of the QUBO equal to the objective of the
-            BLEC
+        c (float): a constant that makes the objective of the QUBO equal to the
+            objective value of the original constrained integer program
         """
 
         if feasibility:

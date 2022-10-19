@@ -10,7 +10,6 @@ class RoutingProblem:
     A base class intended to enforce a consistent interface among the different
     formulations of the Vehicle Routing Problem with Time Windows (VRPTW)
     """
-
     def __init__(self, vrptw):
         """
         Constructor
@@ -115,14 +114,14 @@ class RoutingProblem:
         """
         raise NotImplementedError
 
-    def get_qubo(self, penalty_parameter=None, feasibility=False):
+    def get_qubo(self, feasibility=False, penalty_parameter=None):
         """
         Get the Quadratic Unconstrained Binary Optimization problem reformulation
 
         args:
+        feasibility (bool): Get the feasibility problem (ignore the objective)
         penalty_parameter (float): value of penalty parameter to use for reformulation.
             If None, it is determined automatically
-        feasibility (bool): Get the feasibility problem (ignore the objective)
 
         Return:
         Q (ndarray): Square matrix defining QUBO
