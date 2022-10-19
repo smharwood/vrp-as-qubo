@@ -25,7 +25,7 @@ class SequenceBasedRoutingProblem(RoutingProblem):
     """
     # pylint: disable=too-many-instance-attributes
 
-    def __init__(self, vrptw=None, strict=False):
+    def __init__(self, vrptw=None, strict=True):
         """
         Initialize a sequence-based routing problem.
 

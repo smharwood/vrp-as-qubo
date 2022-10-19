@@ -6,10 +6,7 @@ An example inspired by MIRPLib Group 1 instance
 https://mirplib.scl.gatech.edu/sites/default/files/LR1_2_DR1_3_VC2_V6a.txt
 Some modifications
 """
-import sys
-import numpy as np
-sys.path.append("../")
-from formulations.mirp import MIRP
+from formulations import MIRP
 
 def get_mirp(time_horizon):
     """
@@ -73,29 +70,3 @@ def get_mirp(time_horizon):
     mirp.add_exit_arcs()
     mirp.add_entry_arcs(time_limit=14)
     return mirp
-
-def test():
-    mirp = get_mirp(31)
-    pbrp = mirp.get_path_based()
-    for n in pbrp.nodes:
-        print(n)
-    print(f"Num variables: {pbrp.get_num_variables()}")
-    pbrp.export_mip("ExMIRPg1.lp")
-    soln = pbrp.solve_cplex_prob("ExMIRPg1.soln")
-    # routes = abrp.get_routes(soln)
-    # print("\nSolution status: "+cp.solution.get_status_string())
-    return
-
-def test_feas():
-    mirp = get_mirp(300)
-    pbrp = mirp.get_path_based(make_feasible=True)
-    fs = pbrp.feasible_solution
-    A_eq, b_eq, _, _ = pbrp.get_constraint_data()
-    res = A_eq.dot(fs) - b_eq
-    print(f"residual: {res}")
-    assert np.isclose(np.linalg.norm(res), 0), "Feasible solution is not feasible"
-    return
-
-if __name__ == "__main__":
-    test()
-    # test_feas()

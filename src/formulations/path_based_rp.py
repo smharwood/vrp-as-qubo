@@ -209,7 +209,7 @@ class PathBasedRoutingProblem(RoutingProblem):
             # Minimize value function
             # Maybe add some randomization, proportional to this objective
             try:
-                sampledNode, minNode = getSampledKey(PotentialNodesAndVals, explore)
+                sampledNode, minNode = get_sampled_key(PotentialNodesAndVals, explore)
                 a = (currNode, sampledNode)
                 feas_arc, time, load = self.check_arc(time, load, a)
                 # Update value function estimate:
@@ -509,7 +509,7 @@ class PathBasedRoutingProblem(RoutingProblem):
         return cplex_prob
 
 
-def getSampledKey(key_val, explore):
+def get_sampled_key(key_val, explore):
     """ Sample the keys of a dictionary inversely proportional to the real values
 
     The idea is to transform the values into a probability distribution with probability inversely

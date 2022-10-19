@@ -1,225 +1,103 @@
-# -*- coding: utf-8 -*-
 """
-Created on 6 January 2020
+SM Harwood
+19 October 2022
 
-@author: smharwo
-"""
-
-"""
 Simple example from
-Desrochers, Desrosiers, Solomon, "A new optimization algorithm for the vehicle routing problem with time windows"
+Desrochers, Desrosiers, Solomon, "A new optimization algorithm for the vehicle
+routing problem with time windows"
 to test stuff
 """
 import numpy as np
-import arc_based.RoutingProblem as rp
+from formulations import (
+    VRPTW,
+    ArcBasedRoutingProblem,
+    PathBasedRoutingProblem,
+    SequenceBasedRoutingProblem
+)
 
-
-def DefineProblem(time_points=None):
-    """ Define a simple problem
-
-    args:
-    time_points (list): The set of discrete time points for the problem
-
-    return:
-    prob (arc_based.RoutingProblem): An arc-based RoutingProblem object representing the problem
-    """
-
-    if time_points is None:
-        time_points = [0,1,2,4,7]
-
+def get_vrptw():
+    """ Get the basic VRPTW data """
     # Get object
-    prob = rp.RoutingProblem()
-    
+    vrp = VRPTW()
+    vrp.set_vehicle_cap(6)
+    vrp.set_initial_loading(6)
+
     # A depot node is required
-    prob.addDepot('D',(0,np.inf))
+    vrp.add_node('D', 0, (0,np.inf))
+    vrp.set_depot('D')
 
     # Add nodes (Name, Time Window)
     # Nodes have the same level of demand
-    prob.addNode('1',(1,7))
-    prob.addNode('2',(2,4))
-    prob.addNode('3',(4,7))
+    vrp.add_node('1',(1,7))
+    vrp.add_node('2',(2,4))
+    vrp.add_node('3',(4,7))
 
-    # add time points
-    #prob.addTimePoints(list(range(0,8)))
-    prob.addTimePoints(time_points)
+    # Add arcs (Origin, Destination, Time, Cost)
+    vrp.add_arc('D','1', 1, 1)
+    vrp.add_arc('D','2', 2, 2)
+    vrp.add_arc('D','3', 2, 2)
 
-    # Add arcs (Origin, Destination, Time, Cost=0)
-    prob.addArc('D','1', 1, 1)
-    prob.addArc('D','2', 2, 2)
-    prob.addArc('D','3', 2, 2)
+    vrp.add_arc('1','D', 1, 1)
+    vrp.add_arc('1','2', 1, 1)
+    vrp.add_arc('1','3', 1, 1)
 
-    prob.addArc('1','D', 1, 1)
-    prob.addArc('1','2', 1, 1)
-    prob.addArc('1','3', 1, 1)
+    vrp.add_arc('2','D', 2, 2)
+    vrp.add_arc('2','1', 1, 1)
+    vrp.add_arc('2','3', 1, 1)
 
-    prob.addArc('2','D', 2, 2)
-    prob.addArc('2','1', 1, 1)
-    prob.addArc('2','3', 1, 1)
+    vrp.add_arc('3','D', 2, 2)
+    vrp.add_arc('3','1', 1, 1)
 
-    prob.addArc('3','D', 2, 2)
-    prob.addArc('3','1', 1, 1)
+    return vrp
 
-    return prob
-
-def getQUBO(feasibility=False):
+def get_high_cost():
+    """ Get a "high cost" route for this problem
+    (any feasible route has cost <= 8)
     """
-    Define the problem and actually get back the QUBO matrix
-    """
-    prob = DefineProblem()
-    # get matrix and constant defining QUBO
-    # use automatically calculated penalty parameter
-    return prob.getQUBO(None, feasibility)
+    return 10
 
-def getCplexProb():
-    """
-    Define the problem and get CPLEX object encoding problem
-    """
-    prob = DefineProblem()
-    return prob.getCplexProb()
+def get_arc_based(time_points=None):
+    """ Get the arc-based formulation """
+    if time_points is None:
+        time_points = [0,1,2,4,7]
 
+    vrp = get_vrptw()
+    abrp = ArcBasedRoutingProblem(vrp)
+    abrp.add_time_points(time_points)
+    return abrp
 
-def test(feas):
+def get_path_based():
+    """ Get the path-based formulation """
+    vrp = get_vrptw()
+    pbrp = PathBasedRoutingProblem(vrp)
 
-    if feas:
-        print("\nRunning as FEASIBILITY problem")
-    else:
-        print("\nRunning as normal optimality problem")
-    prob = DefineProblem()
-    prob.build_blec_constraints()
-    prob.build_blec_obj()
-    Q, c = prob.getQUBO(None,feas)
-    prob.export_mip('ExSmall.lp')
+    # Add/check routes
+    # From paper, we know there are 11
+    routes = [None]*13
+    routes[0] = ['D','1','D']
+    routes[1] = ['D','2','D']
+    routes[2] = ['D','3','D']
+    routes[3] = ['D','1','2','D']
+    routes[4] = ['D','1','3','D']
+    routes[5] = ['D','2','1','D']
+    routes[6] = ['D','2','3','D']
+    routes[7] = ['D','3','1','D']
+    routes[8] = ['D','1','2','3','D']
+    routes[9] = ['D','2','1','3','D']
+    routes[10]= ['D','2','3','1','D']
+    routes[11]= ['D','2','3','1','3','D'] # infeasible to test
+    routes[12]= ['D'] # is this feasible? no
 
-    # How big is it
-    print('Nodes')
-    for n in prob.Nodes:
-        print(n)
-    print('Arcs')
-    for a in prob.Arcs.values():
-        print(a)
-    print('Num variables: {}'.format(prob.getNumVariables()))
-    
-    # QUBO
-    shape = Q.shape
-    nnz = Q.nnz
-    print("QUBO constant: {}".format(c))
-    print('QUBO: {}x{} w/ {} nonzeros'.format(shape[0],shape[1],nnz))
+    for route in routes:
+        f, _ = pbrp.add_route(route)
+        if not f:
+            print(f"{route} not feasible")
+    return pbrp
 
-    # QUBO object to calculate objectives
-    qubo = qt.QUBOContainer(Q,c,'symmetric')
-
-    # Binary variable solution:
-    # We expect D-1-2-3-D to be feasible (if we get timing right)
-    # This uses arcs with cost 0; expect objective = 0
-    x = np.zeros(prob.getNumVariables())
-    # D - 1
-    i = prob.getNodeIndex('D')
-    s = 0
-    j = prob.getNodeIndex('1')
-    t = 1
-    x[prob.getVarIndex(i,s,j,t)] = 1
-    # 1 - 2
-    i = prob.getNodeIndex('1')
-    s = 1
-    j = prob.getNodeIndex('2')
-    t = 2
-    x[prob.getVarIndex(i,s,j,t)] = 1
-    # 2 - 3
-    i = prob.getNodeIndex('2')
-    s = 2
-    j = prob.getNodeIndex('3')
-    t = 4
-    x[prob.getVarIndex(i,s,j,t)] = 1
-    # 3 - D
-    i = prob.getNodeIndex('3')
-    s = 4
-    j = prob.getNodeIndex('D')
-    t = 7
-    x[prob.getVarIndex(i,s,j,t)] = 1
-
-    assert sum(x) == 4, 'Some arc not allowed'
-    print("\nFeasible configuration?: {}".format(x))
-    print("Objective value: {}".format(qubo.evaluate_QUBO(x)))
-
-    # Another:
-    # We expect D-1-D and D-2-3-D to be feasible (if we get timing right)
-    # This uses the expensive arc D-2
-    x = np.zeros(prob.getNumVariables())
-    # D - 1
-    i = prob.getNodeIndex('D')
-    s = 0
-    j = prob.getNodeIndex('1')
-    t = 1
-    x[prob.getVarIndex(i,s,j,t)] = 1
-    # 1 - D
-    i = prob.getNodeIndex('1')
-    s = 1
-    j = prob.getNodeIndex('D')
-    t = 2
-    x[prob.getVarIndex(i,s,j,t)] = 1
-
-    # D - 2
-    i = prob.getNodeIndex('D')
-    s = 0
-    j = prob.getNodeIndex('2')
-    t = 2
-    x[prob.getVarIndex(i,s,j,t)] = 1
-    # 2 - 3
-    i = prob.getNodeIndex('2')
-    s = 2
-    j = prob.getNodeIndex('3')
-    t = 4
-    x[prob.getVarIndex(i,s,j,t)] = 1
-    # 3 - D
-    i = prob.getNodeIndex('3')
-    s = 4
-    j = prob.getNodeIndex('D')
-    t = 7
-    x[prob.getVarIndex(i,s,j,t)] = 1
-
-    assert sum(x) == 5, 'Some arc not allowed'
-    print("\nFeasible configuration?: {}".format(x))
-    print("Objective value: {}".format(qubo.evaluate_QUBO(x)))
-
-    # Test INfeasible solution
-    # We expect D-1-2-D to be INfeasible (not visiting 3)
-    x = np.zeros(prob.getNumVariables())
-    # D - 1
-    i = prob.getNodeIndex('D')
-    s = 0
-    j = prob.getNodeIndex('1')
-    t = 1
-    x[prob.getVarIndex(i,s,j,t)] = 1
-    # 1 - 2
-    i = prob.getNodeIndex('1')
-    s = 1
-    j = prob.getNodeIndex('2')
-    t = 2
-    x[prob.getVarIndex(i,s,j,t)] = 1
-    # 2 - D
-    i = prob.getNodeIndex('2')
-    s = 2
-    j = prob.getNodeIndex('D')
-    t = 4
-    x[prob.getVarIndex(i,s,j,t)] = 1
-    
-    assert sum(x) == 3, 'Some arc not allowed'
-    print("\nINFeasible configuration?: {}".format(x))
-    print("Objective value: {}".format(qubo.evaluate_QUBO(x)))
-    return
-
-def test_print():
-    prob = DefineProblem()
-    cp = prob.getCplexProb()
-    cp.solve()
-    soln = cp.solution.get_values()
-    routes = prob.getRoutes(soln)
-    print("\nSolution status: "+cp.solution.get_status_string())
-    print("Routes (Node,time sequences):")
-    for r in routes: print(r)
-    return
-
-if __name__ == "__main__":
-#    test(feas=True)
-#    test(feas=False)
-    test_print()
+def get_sequence_based(max_vehicles=2, max_sequence_length=4):
+    """ Get the sequence-based formulation """
+    vrp = get_vrptw()
+    sbrp = SequenceBasedRoutingProblem(vrp)
+    sbrp.set_max_vehicles(max_vehicles)
+    sbrp.set_max_sequence_length(max_sequence_length)
+    return sbrp

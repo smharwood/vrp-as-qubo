@@ -285,20 +285,20 @@ class MIRP:
             self.pbrp.make_feasible(high_cost)
         return self.pbrp
 
-    def get_sequence_based(self, make_feasible=True):
+    def get_sequence_based(self, make_feasible=True, strict=True):
         """
         Return the sequence-based routing problem object
         Build if necessary, including setting number of vehicles and sequence numbers
         """
         if self.sbrp is not None:
             return self.sbrp
-        self.sbrp = SequenceBasedRoutingProblem(self.vrptw)
+        self.sbrp = SequenceBasedRoutingProblem(self.vrptw, strict)
         max_vehicles = self.vrptw.estimate_max_vehicles()
         self.sbrp.set_max_vehicles(max_vehicles)
         # Number of moves/stops in a route:
         # estimate from time horizon divided by shortest travel arc, plus entry and exit
         travel_times = [arc.get_travel_time() for arc in self.vrptw.arcs.values()]
-        min_travel_time = min(travel_times)
+        min_travel_time = min(filter(lambda t: t > 0, travel_times))
         self.sbrp.set_max_sequence_length(int(self.time_horizon/min_travel_time + 2))
         if make_feasible:
             high_cost = self.estimate_high_cost()
