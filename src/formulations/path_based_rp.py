@@ -3,7 +3,6 @@ SM Harwood
 16 October 2022
 """
 import logging
-from copy import deepcopy
 import numpy as np
 from scipy import sparse
 from scipy.special import softmax
@@ -24,15 +23,15 @@ class PathBasedRoutingProblem(RoutingProblem):
 
     ILP:
 
-    \min_x \sum_r c_r x_r
+    min_x ∑_r c_r x_r
       s.t.
-      \sum_r \delta_k,r x_r = 1, for each node k,
-      x_r \in {0,1}, for all routes r
+      ∑_r δ_k,r x_r = 1, for each node k,
+      x_r ∈ {0,1}, for all routes r
 
     where
         x_r = 1 if route r is chosen (0 otherwise)
         c_r = cost of route r
-        \delta_k,r = 1 if route r visits node k
+        δ,r = 1 if route r visits node k
 
     The interpretation is that we wish to choose vehicle routes,
     so that each (non-depot) node is visited exactly once,
@@ -139,12 +138,12 @@ class PathBasedRoutingProblem(RoutingProblem):
         time += arc.get_travel_time()
         time = max(time, dest.get_window()[0])
         if time > dest.get_window()[1]:
-            logger.debug(f"Check arc {arc_key}: time window bad")
+            logger.debug("Check arc %s: time window bad", arc_key)
             return False, time, load
         # Is the load physical (nonnegative and within capacity)?
         load += dest.get_load()
         if load > self.vehicle_cap or load < 0:
-            logger.debug(f"Check arc {arc_key}: capacity bad")
+            logger.debug("Check arc %s: capacity bad", arc_key)
             return False, time, load
         return True, time, load
 
@@ -317,10 +316,6 @@ class PathBasedRoutingProblem(RoutingProblem):
         # Make new arcs as costly as most expensive (regular) route
         # high_cost = np.max(self.route_costs)
         depot_name = self.node_names[self.depot_index]
-        if len(unvisited_indices) > 0:
-            # If we have to modufy the graph, make a copy in case the VRPTW object
-            # is shared among different formulations
-            self.vrptw = deepcopy(self.vrptw)
         for u in unvisited_indices:
             # Add arcs and a route through the unvisited node;
             # to be a valid arc/route, the loading constraints must be satisfied
@@ -352,7 +347,7 @@ class PathBasedRoutingProblem(RoutingProblem):
             r = [self.depot_index, new_node_index, u, self.depot_index]
             routes.append(r)
             feas, _ = self.add_route(r)
-            logger.info(f"New feasibility route: {r}")
+            logger.info("New feasibility route: %s", r)
             assert feas, "Something not right in make_feasible"
 
         # construct and save feasible solution
@@ -428,7 +423,8 @@ class PathBasedRoutingProblem(RoutingProblem):
                 penalty_parameter = sufficient_pp + 1.0
             if penalty_parameter <= sufficient_pp:
                 logger.warning(
-                    f"Penalty parameter might not be big enough...(>{sufficient_pp})")
+                    "Penalty parameter might not be big enough...(>%s)", sufficient_pp
+                )
 
         # num_nodes = len(self.nodes)
         num_vars = len(self.route_costs)

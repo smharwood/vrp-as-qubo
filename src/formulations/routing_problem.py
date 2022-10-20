@@ -2,6 +2,7 @@
 SM Harwood
 16 October 2022
 """
+from copy import deepcopy
 import numpy as np
 from .vrptw import VRPTW
 
@@ -20,6 +21,8 @@ class RoutingProblem:
         """
         if vrptw is None:
             vrptw = VRPTW()
+        else:
+            vrptw = deepcopy(vrptw)
         self.vrptw = vrptw
         self.feasible_solution = None
 

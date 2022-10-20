@@ -3,17 +3,28 @@ SM Harwood
 19 October 2022
 """
 import sys
+import logging
+from functools import partial
 import numpy as np
-sys.path.append("../")
+sys.path.append("..")
 from examples.mirp_g1 import get_mirp
+
+logging.basicConfig(level=logging.DEBUG)
 
 def test():
     """ Test the feasibility heuristic, and constraint data """
     mirp = get_mirp(300)
-    names = ["arc", "path", "sequence"]
-    getters = [mirp.get_arc_based, mirp.get_path_based, mirp.get_sequence_based]
+    names= []
+    getters = []
+    # names.append("arc")
+    # getters.append(mirp.get_arc_based)
+    # names.append("path")
+    # getters.append(mirp.get_path_based)
+    names.append("sequence")
+    getters.append(partial(mirp.get_sequence_based, strict=False))
 
     for name, getter in zip(names, getters):
+        print(f"\n{name}-based:")
         r_p = getter(make_feasible=True)
         f_s = r_p.feasible_solution
         A_eq, b_eq, Q_eq, r_eq = r_p.get_constraint_data()

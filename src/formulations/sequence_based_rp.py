@@ -4,9 +4,9 @@ SM Harwood
 """
 import time
 import logging
+from itertools import product
 import numpy as np
 from scipy import sparse
-from itertools import product
 from .vrptw import Arc
 from .routing_problem import RoutingProblem
 try:
@@ -35,9 +35,6 @@ class SequenceBasedRoutingProblem(RoutingProblem):
             causing infeasible problems.
         """
         super().__init__(vrptw)
-        #TODO:
-        # if vrptw is not None and strict is True, we need to copy the object
-        # and follow derived add_arc logic
         self.strict = strict
         self.max_sequence_length = 0
         self.max_vehicles = 0
@@ -58,6 +55,25 @@ class SequenceBasedRoutingProblem(RoutingProblem):
         self.quadratic_constraints_matrix = None
         self.linear_constraints_matrix = None
         self.linear_constraints_rhs = None
+
+        # If the underlying VRPTW already has arcs, we should check that they
+        # satisfy the conditions implied by `strict`
+        if strict:
+            old_arcs = self.arcs
+            self.vrptw.arcs = dict()
+            for arc in old_arcs.values():
+                self.add_arc(
+                    arc.origin.name,
+                    arc.destination.name,
+                    arc.travel_time,
+                    arc.cost
+                )
+        # Also, if there is a depot, use the derived class set_depot
+        try:
+            depot_nm = self.node_names[self.depot_index]
+            self.set_depot(depot_nm)
+        except IndexError:
+            pass
 
     def set_max_sequence_length(self, max_sequence_length):
         """ Set the maximum length of a route/sequence of moves """
@@ -169,7 +185,7 @@ class SequenceBasedRoutingProblem(RoutingProblem):
                     num_vars += 1
         # end loops
         duration = time.time() - start
-        logger.info(f"Variable enumeration took {duration} seconds")
+        logger.info("Variable enumeration took %s seconds", duration)
         self.num_variables = num_vars
         self.variables_enumerated = True
         return
@@ -302,7 +318,7 @@ class SequenceBasedRoutingProblem(RoutingProblem):
         )
         self.quad_con_built = True
         duration = time.time() - start
-        logger.info(f"Quadratic constraints built in {duration} seconds")
+        logger.info("Quadratic constraints built in %s seconds", duration)
         return
 
     def quadratic_constraint_logic(self, vi, si, ni, nj, pqrow, pqcol):
@@ -409,7 +425,7 @@ class SequenceBasedRoutingProblem(RoutingProblem):
         self.linear_constraints_rhs = np.array(brhs)
         self.lin_con_built = True
         duration = time.time() - start
-        logger.info(f"Linear constraints built in {duration} seconds")
+        logger.info("Linear constraints built in %s seconds", duration)
         return
 
     def make_feasible(self, high_cost):
@@ -453,7 +469,7 @@ class SequenceBasedRoutingProblem(RoutingProblem):
                     if not self.check_arc(arc):
                         node_nm = self.node_names[current_node]
                         self.add_arc(node_nm, depot_nm, 0, 0)
-                        logger.info(f"Adding arc {node_nm} -- {depot_nm}")
+                        logger.info("Adding arc %s -- %s", node_nm, depot_nm)
                     for sii in range(si, self.max_sequence_length-1):
                         used_sequences.append((vi, sii, 0))
                     break
@@ -473,18 +489,18 @@ class SequenceBasedRoutingProblem(RoutingProblem):
             vi = self.max_vehicles
             self.max_vehicles += 1
             self.vehicle_cost.append(high_cost)
-            logger.info(f"Adding vehicle {vi} with cost {high_cost}")
+            logger.info("Adding vehicle %s with cost %s", vi, high_cost)
             arc = (0, ni)
             node_nm = self.node_names[ni]
             # check and add entry arc
             if not self.check_arc((0, ni)):
                 self.add_arc(depot_nm, node_nm, 0, high_cost)
-                logger.info(f"Adding arc {depot_nm} -- {node_nm}")
+                logger.info("Adding arc %s -- %s", depot_nm, node_nm)
             used_sequences.append((vi, 1, ni))
             # check and add exit arc
             if not self.check_arc((ni, 0)):
                 self.add_arc(node_nm, depot_nm, 0, high_cost)
-                logger.info(f"Adding arc {node_nm} -- {depot_nm}")
+                logger.info("Adding arc %s-- %s", node_nm, depot_nm)
             # finish out sequence at depot
             for si in range(2, self.max_sequence_length-1):
                 used_sequences.append((vi, si, 0))
@@ -559,7 +575,8 @@ class SequenceBasedRoutingProblem(RoutingProblem):
             penalty_parameter = sufficient_pp + 1.0
         if penalty_parameter <= sufficient_pp:
             logger.warning(
-                "Penalty parameter might not be big enough...(>{})".format(sufficient_pp))
+                "Penalty parameter might not be big enough...(>%s)", sufficient_pp
+            )
 
         qval = []
         qrow = []
@@ -706,8 +723,7 @@ class SequenceBasedRoutingProblem(RoutingProblem):
         tuples_to_sort = np.flip(np.array(soln_var_tuples), -1)
         arg_sorted = np.lexsort(tuples_to_sort.T)
         tuples_ordered = [soln_var_tuples[i] for i in arg_sorted]
-        # A dirty print
-        logger.debug(f"tuples_ordered={tuples_ordered}")
+        logger.debug("tuples_ordered=%s", tuples_ordered)
 
         routes = []
         # Build up routes and do dummy checks
@@ -718,10 +734,10 @@ class SequenceBasedRoutingProblem(RoutingProblem):
                 t = tuples_ordered.pop(0)
                 curr_node = t[2]
                 if t[0] != vi or t[1] != si:
-                    logger.warning("Unexpected tuple {} in solution".format(t))
+                    logger.warning("Unexpected tuple %s in solution", t)
                     continue
                 if prev_node and not self.check_arc((prev_node, curr_node)):
-                    logger.warning("Solution uses unallowed arc {}".format((prev_node, curr_node)))
+                    logger.warning("Solution uses unallowed arc %s - %s", prev_node, curr_node)
                     continue
                 routes[-1].append(curr_node)
                 prev_node = curr_node
@@ -736,18 +752,21 @@ class SequenceBasedRoutingProblem(RoutingProblem):
 
     #     print("Quadratic terms:")
     #     for (r,c,val) in zip(self.objective_q.row,self.objective_q.col,self.objective_q.data):
-    #         (vi,si,ni) = self.get_var_tuple_index(r)            
+    #         (vi,si,ni) = self.get_var_tuple_index(r)
     #         (vj,sj,nj) = self.get_var_tuple_index(c)
     #         print("(v{}, s{}, {}) -- (v{}, s{}, {}) : {}".format(
     #                 vi,si,self.node_names[ni], vj,sj,self.node_names[nj], val))
 
     # def print_edge_penalty(self):
-    #     """Just display the sparse matrix encoding the edge penalty bi/linear terms in a nice way"""
+    #     """
+    #     Just display the sparse matrix encoding the edge penalty bi/linear
+    #     terms in a nice way
+    #     """
     #     print("Quadratic Edge Penalty terms:")
     #     for (r,c,val) in zip(self.quadratic_constraints_matrix.row,
     #                          self.quadratic_constraints_matrix.col,
     #                          self.quadratic_constraints_matrix.data):
-    #         (vi,si,ni) = self.get_var_tuple_index(r)            
+    #         (vi,si,ni) = self.get_var_tuple_index(r)
     #         (vj,sj,nj) = self.get_var_tuple_index(c)
     #         print("(v{}, s{}, {}) -- (v{}, s{}, {}) : (not allowed)".format(
     #                 vi,si,self.node_names[ni], vj,sj,self.node_names[nj]))
@@ -759,7 +778,7 @@ class SequenceBasedRoutingProblem(RoutingProblem):
 
     #     Qcoo = Q.tocoo()
     #     for (r,c,val) in zip(Qcoo.row,Qcoo.col,Qcoo.data):
-    #         (vi,si,ni) = self.get_var_tuple_index(r)            
+    #         (vi,si,ni) = self.get_var_tuple_index(r)
     #         (vj,sj,nj) = self.get_var_tuple_index(c)
     #         print("(v{}, s{}, {}) -- (v{}, s{}, {}) : {}".format(
     #                 vi,si,self.node_names[ni], vj,sj,self.node_names[nj], val))

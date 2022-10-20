@@ -67,7 +67,7 @@ class ArcBasedRoutingProblem(RoutingProblem):
         self.enumerate_variables_quicker()
         #self.enumerate_variables_exhaustive()
         duration = time.time() - start
-        logger.info("Variable enumeration took {} seconds".format(duration))
+        logger.info("Variable enumeration took %s seconds", duration)
         return
 
     def enumerate_variables_quicker(self):
@@ -177,7 +177,7 @@ class ArcBasedRoutingProblem(RoutingProblem):
         # linear terms
         self.objective = np.zeros(self.get_num_variables())
         for k in range(self.get_num_variables()):
-            (i,s,j,t) = self.var_mapping[k]
+            i, _, j, _ = self.var_mapping[k]
             self.objective[k] = self.arcs[(i,j)].get_cost()
         self.objective_built = True
         return
@@ -191,7 +191,7 @@ class ArcBasedRoutingProblem(RoutingProblem):
         self.build_constraints_quicker()
         #self.build_constraints_exhaustive()
         duration = time.time() - start
-        logger.info("Constraint construction took {} seconds".format(duration))
+        logger.info("Constraint construction took %s seconds", duration)
         return
 
     def build_constraints_exhaustive(self):
@@ -408,18 +408,26 @@ class ArcBasedRoutingProblem(RoutingProblem):
                     current_time = best_arrival
                     unvisited_indices.remove(best_node)
                 else:
-                    # route cannot be continued; exit to depot
-                    # create arc if necessary (indicator of malspecified problem)
+                    # route cannot be continued
+                    # Add arc back to depot if possible
                     building_route = False
                     arc = (current_node, 0)
-                    self.check_and_add_exit_arc(current_node)
-                    # Make sure that we can get back to depot with the discrete
-                    # time points available
+                    assert self.check_arc(arc), f"No arcs back to depot from {current_node}"
+                    t_w = self.nodes[0].get_window()
                     arrival_actual, in_tp = self.get_arrival_time(current_time, arc)
-                    if not in_tp:
-                        # if arrival time is not in time_points, add it in
-                        self.time_points = np.append(self.time_points, arrival_actual)
-                    used_arcs.append((current_node,current_time, 0,arrival_actual))
+                    assert in_tp, f"No arcs back to depot from {current_node} within time horizon"
+                    used_arcs.append((current_node, current_time, 0, arrival_actual))
+                    # We could potentially add an arc back to depot,
+                    # but I think this is messy and an indicator of a malspecified
+                    # problem...
+                    # self.check_and_add_exit_arc(current_node)
+                    # # Make sure that we can get back to depot with the discrete
+                    # # time points available
+                    # arrival_actual, in_tp = self.get_arrival_time(current_time, arc)
+                    # if not in_tp:
+                    #     # if arrival time is not in time_points, add it in
+                    #     self.time_points = np.append(self.time_points, arrival_actual)
+                    # used_arcs.append((current_node,current_time, 0,arrival_actual))
             # end building route
         # end construction over all routes
 
@@ -436,7 +444,7 @@ class ArcBasedRoutingProblem(RoutingProblem):
             node_nm = self.node_names[n]
             assert not self.check_arc(arc), \
                 f"We should have been able to construct a route through node {node_nm}"
-            logger.info("Adding entry arc to {}".format(node_nm))
+            logger.info("Adding entry arc to %s", node_nm)
             added = self.add_arc(depot_nm, node_nm, 0, high_cost)
             assert added, "Something is wrong in construction heuristic"
             current_time = self.time_points[0]
@@ -470,7 +478,7 @@ class ArcBasedRoutingProblem(RoutingProblem):
         if not self.check_arc(arc):
             node_nm = self.node_names[node_index]
             depot_nm = self.node_names[0]
-            logger.info("Adding exit arc from {}".format(node_nm))
+            logger.info("Adding exit arc from %s", node_nm)
             added = self.add_arc(node_nm, depot_nm, 0, cost)
             assert added, f"Something is wrong with exit arcs: {arc} not added"
             # Since we are adding arcs, we need to re-construct/enumerate stuff
@@ -529,7 +537,8 @@ class ArcBasedRoutingProblem(RoutingProblem):
                 penalty_parameter = sufficient_pp + 1.0
             if penalty_parameter <= sufficient_pp:
                 logger.warning(
-                    "Penalty parameter might not be big enough...(>{})".format(sufficient_pp))
+                    "Penalty parameter might not be big enough...(>%s)", sufficient_pp
+                )
 
         qval = []
         qrow = []
