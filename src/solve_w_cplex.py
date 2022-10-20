@@ -3,10 +3,11 @@
 SM Harwood
 
 Solve various versions of the routing problems with CPLEX
-Note that we are ignoring the original formulation with hard constraints - 
+Note that we are ignoring the original formulation with hard constraints -
 given an Ising problem/QUBO, how well do classical methods handle it?
 """
-import os, argparse
+import os
+import argparse
 import cplex
 import numpy as np
 import scipy.sparse as sp
@@ -17,6 +18,7 @@ CPLEX_FEASIBLE = ["integer optimal solution", "integer optimal, tolerance",
     "solution limit exceeded"]
 
 def main():
+    """ Script to organize options and parameters """
     parser = argparse.ArgumentParser(description=
         "Solve Ising problems and binary ILP with CPLEX",
         formatter_class=argparse.RawTextHelpFormatter)
@@ -53,7 +55,8 @@ def solve_all_isings(testset_path, first_feasible=False, verbose=True):
     solution_times = dict()
     for f in fnames:
         if f.split('.')[-1] == "rudy":
-            if verbose: print("Processing {}...".format(f))
+            if verbose:
+                print(f"Processing {f}...")
             # Found an Ising problem;
             # Load the matrix,
             # extract the correct representation,
@@ -66,7 +69,8 @@ def solve_all_isings(testset_path, first_feasible=False, verbose=True):
             if first_feasible:
                 # Stop at first feasible solution found...
                 # for an unconstrained problem, is this trivial?
-                if verbose: print("Stopping at first feasible solution")
+                if verbose:
+                    print("Stopping at first feasible solution")
                 cplex_prob.parameters.mip.limits.solutions.set(1)
             start = cplex_prob.get_time()
             cplex_prob.solve()
@@ -79,12 +83,12 @@ def solve_all_isings(testset_path, first_feasible=False, verbose=True):
             xstar = cplex_prob.solution.get_values()
             sol_fn = os.path.splitext(f)[0] + ".sol"
             sol_path = os.path.join(testset_path, sol_fn)
-            with open(sol_path, 'w') as s:
+            with open(sol_path, 'w', encoding="utf-8") as s:
                 spins = QT.x_to_s(np.asarray(xstar))
                 for spin in spins:
-                    s.write("{}\n".format(int(spin)))
+                    s.write(f"{int(spin)}\n")
             if verbose:
-                print("Instance {}, objective value {} found in {} seconds".format(f, objective, soltime))
+                print(f"Instance {f}, objective value {objective} found in {soltime} seconds")
     return objectives, solution_times
 
 def solve_all_lps(testset_path, first_feasible=False, verbose=True):
@@ -94,7 +98,8 @@ def solve_all_lps(testset_path, first_feasible=False, verbose=True):
     solution_times = dict()
     for f in fnames:
         if f.split('.')[-1] == "lp":
-            if verbose: print("Processing {}...".format(f))
+            if verbose:
+                print(f"Processing {f}...")
             # Found a `.lp`
             # Load and solve
             cplex_prob = cplex.Cplex(os.path.join(testset_path, f))
@@ -103,8 +108,9 @@ def solve_all_lps(testset_path, first_feasible=False, verbose=True):
                 cplex_prob.set_results_stream(None)
             if first_feasible:
                 # Stop at first feasible solution found
-                if verbose: print("Stopping at first feasible solution")
-                cplex_prob.parameters.mip.limits.solutions.set(1)               
+                if verbose:
+                    print("Stopping at first feasible solution")
+                cplex_prob.parameters.mip.limits.solutions.set(1)
             start = cplex_prob.get_time()
             cplex_prob.solve()
             soltime = cplex_prob.get_time() - start
@@ -114,13 +120,13 @@ def solve_all_lps(testset_path, first_feasible=False, verbose=True):
             else:
                 objective = np.inf
                 if verbose:
-                    print("Instance {}, status {}".format(f, stat))
+                    print(f"Instance {f}, status {stat}")
             objectives[f] = objective
             solution_times[f] = soltime
             # NOTE: solution values are probably meaningless
             # I think reading from the .lp file messes with the variable order
             if verbose:
-                print("Instance {}, objective value {} found in {} seconds".format(f, objective, soltime))
+                print(f"Instance {f}, objective value {objective} found in {soltime} seconds")
     return objectives, solution_times
 
 def build_cplex_from_qubo(Q):
@@ -138,7 +144,7 @@ def build_cplex_from_qubo(Q):
     # Define object
     cplex_prob = cplex.Cplex()
     cplex_prob.objective.set_sense(cplex_prob.objective.sense.minimize)
-    
+
     # Variables: all binary
     var_types = [cplex_prob.variables.type.binary] * n
     cplex_prob.variables.add(obj=c, types=var_types)

@@ -2,9 +2,12 @@
 SM Harwood
 19 October 2022
 """
+import os
 import sys
 import logging
-sys.path.append("..")
+# I feel this is a little hacky, but its robust to whatever the current working
+# directory might be
+sys.path.append(os.path.join(sys.path[0], ".."))
 from formulations.path_based_rp import get_sampled_key as sampler
 
 logging.basicConfig(level=logging.DEBUG)

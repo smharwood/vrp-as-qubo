@@ -2,9 +2,12 @@
 SM Harwood
 19 October 2022
 """
+import os
 import sys
 import logging
-sys.path.append("..")
+# I feel this is a little hacky, but its robust to whatever the current working
+# directory might be
+sys.path.append(os.path.join(sys.path[0], ".."))
 from examples.small import get_path_based, get_high_cost
 
 logging.basicConfig(level=logging.DEBUG)

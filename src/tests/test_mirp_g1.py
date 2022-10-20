@@ -2,9 +2,10 @@
 SM Harwood
 19 October 2022
 """
+import os
 import sys
 import logging
-sys.path.append("..")
+sys.path.append(os.path.join(sys.path[0], ".."))
 from examples.mirp_g1 import get_mirp
 
 logging.basicConfig(level=logging.DEBUG)
