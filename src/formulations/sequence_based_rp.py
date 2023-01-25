@@ -106,12 +106,13 @@ class SequenceBasedRoutingProblem(RoutingProblem):
             (There is no way this arc could ever be used if this is not satisfied)
         For this formulation we can also enforce timing more strictly:
             allow if origin time window END   plus travel time <= destination time window end
+            (unless the origin is the depot)
 
         Return:
             added (bool): whether arc was added or not
         """
-        if self.strict:
-            i = self.get_node_index(origin_name)
+        i = self.get_node_index(origin_name)
+        if self.strict and i != 0:
             j = self.get_node_index(destination_name)
             departure_time = self.nodes[i].get_window()[1]
             if departure_time + travel_time <= self.nodes[j].get_window()[1]:
@@ -119,7 +120,8 @@ class SequenceBasedRoutingProblem(RoutingProblem):
                 return True
             # else
             return False
-        # else not the strict formulation - follow the base class logic
+        # else not the strict formulation, or the origin node is the depot -
+        # follow the base class logic
         return super().add_arc(origin_name, destination_name, travel_time, cost)
 
     def check_arc(self, arc_key):

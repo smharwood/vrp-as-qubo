@@ -409,8 +409,11 @@ class ArcBasedRoutingProblem(RoutingProblem):
                     unvisited_indices.remove(best_node)
                 else:
                     # route cannot be continued
+                    # Break if already at depot
                     # Add arc back to depot if possible
                     building_route = False
+                    if current_node == 0:
+                        break
                     arc = (current_node, 0)
                     assert self.check_arc(arc), f"No arcs back to depot from {current_node}"
                     t_w = self.nodes[0].get_window()

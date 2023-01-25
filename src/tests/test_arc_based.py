@@ -9,15 +9,15 @@ import numpy as np
 # I feel this is a little hacky, but its robust to whatever the current working
 # directory might be (assuming this is run as the main script)
 sys.path.append(os.path.join(sys.path[0], ".."))
-from examples.small import get_path_based, get_high_cost
+from examples.small import get_arc_based, get_high_cost
 from QUBOTools import QUBOContainer
 
 logging.basicConfig(level=logging.DEBUG)
 
 def test():
-    """ Test the path-based formulation with the small example """
-    logging.info("Path based:")
-    r_p = get_path_based()
+    """ Test the arc-based formulation with the small example """
+    logging.info("Arc based:")
+    r_p = get_arc_based()
     r_p.make_feasible(get_high_cost())
     soln = r_p.feasible_solution
     routes = r_p.get_routes(soln)
@@ -35,7 +35,7 @@ def test():
 
     # test whether constraints are satisfied
     A_eq, b_eq, _, _ = r_p.get_constraint_data()
-    assert np.isclose(0, np.linalg.norm(A_eq.dot(soln) - b_eq)), "Linear constraints not satisfied"
+    assert np.isclose(0, np.linalg.norm(A_eq.dot(soln) - b_eq)), "Constraints not satisfied"
     return
 
 if __name__ == "__main__":
