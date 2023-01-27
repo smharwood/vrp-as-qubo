@@ -18,8 +18,8 @@ logging.basicConfig(level=logging.DEBUG)
 
 def main():
     """ Run unit test """
-    test_arc_based.test()
-    # test_path_based.test()
+    # test_arc_based.test()
+    test_path_based.test()
     # test_sequence_based.test()
     # test_mirp_g1.test()
     # test_mirp_g1_feas.test()

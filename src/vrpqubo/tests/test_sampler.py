@@ -3,7 +3,7 @@ SM Harwood
 19 October 2022
 """
 import logging
-from ..formulations.path_based_rp import get_sampled_key as sampler
+from ..routing_problem.formulations.path_based_rp import get_sampled_key as sampler
 
 logger = logging.getLogger(__name__)
 

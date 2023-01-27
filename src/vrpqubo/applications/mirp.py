@@ -4,7 +4,7 @@ SM Harwood
 """
 from itertools import product
 import numpy as np
-from ..formulations import (
+from ..routing_problem import (
     VRPTW,
     ArcBasedRoutingProblem,
     PathBasedRoutingProblem,
