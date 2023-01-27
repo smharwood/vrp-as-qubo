@@ -6,7 +6,7 @@ import logging
 import numpy as np
 from scipy import sparse
 from scipy.special import softmax
-from .routing_problem import RoutingProblem
+from ..routing_problem import RoutingProblem
 try:
     import cplex
 except ImportError:

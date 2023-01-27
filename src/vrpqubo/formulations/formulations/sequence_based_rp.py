@@ -7,8 +7,8 @@ import logging
 from itertools import product
 import numpy as np
 from scipy import sparse
-from .vrptw import Arc
-from .routing_problem import RoutingProblem
+from ..vrptw import Arc
+from ..routing_problem import RoutingProblem
 try:
     import cplex
 except ImportError:

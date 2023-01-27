@@ -6,7 +6,7 @@ import time
 import logging
 import numpy as np
 from scipy import sparse
-from .routing_problem import RoutingProblem
+from ..routing_problem import RoutingProblem
 try:
     import cplex
 except ImportError:
