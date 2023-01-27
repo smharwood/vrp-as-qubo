@@ -117,7 +117,10 @@ def to_symmetric(M):
 
 
 class QUBOContainer:
-
+    """
+    Tools for defining and manipulating Quadratic Unconstrained Binary Optimization
+    (QUBO) problems
+    """
     def __init__(self, Q, c, pattern="upper-triangular"):
         (n, m) = Q.shape
         assert (n == m), "Expected a square matrix."
@@ -218,7 +221,7 @@ class QUBOContainer:
         for i in range(N):
             value = d[i]
             if value != 0:
-                contents.append('\n{:d} {:d} {: .2f}'.format(i, i, value))
+                contents.append(f"\n{i:d} {i:d} {value: .2f}")
                 nDiagonals += 1
         contents.append('\n{} Off-Diagonal terms'.format(cchar))
         nElements = 0
@@ -239,6 +242,6 @@ class QUBOContainer:
         # Write to file
         if filename is None:
             filename = 'fubo' + extension
-        with open(filename, 'w') as f:
+        with open(filename, 'w', encoding="utf-8") as f:
             f.write("".join(contents))
         return

@@ -51,7 +51,7 @@ def main():
         
         # Check for a feasibility problem definition;
         # This assumes the specific organization of the test set
-        dir = os.path.dirname(matrix_path)
+        mat_dir = os.path.dirname(matrix_path)
         name = os.path.basename(matrix_path)
         fn_root, fn_ext = os.path.splitext(name)
         if fn_root[-1] == 'f':
@@ -62,7 +62,7 @@ def main():
                 print("Spins are INfeasible, violation = {}".format(obj))
         else:
             feas_matrix_fn = fn_root[0:-1] + 'f' + fn_ext
-            feas_matrix_path = os.path.join(dir, feas_matrix_fn)
+            feas_matrix_path = os.path.join(mat_dir, feas_matrix_fn)
             if os.path.isfile(feas_matrix_path):
                 print("Corresponding feasibility problem definition "+feas_matrix_path+" found")
                 feas_matrix, feas_constant = loadIsingMatrix(feas_matrix_path)
@@ -250,7 +250,7 @@ def test():
     N = np.random.randint(5, 16)
     Q = 100 * np.random.rand() * np.random.rand(N, N)
     const = 10 * np.random.rand()
-    for i in np.arange(5):
+    for _ in np.arange(5):
         # Randomize a binary vector
         x = (np.random.rand(N)[:] > 0.5).astype(int)
 
