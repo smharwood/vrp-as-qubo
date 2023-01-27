@@ -2,28 +2,23 @@
 SM Harwood
 19 October 2022
 """
-import os
-import sys
 import logging
 import numpy as np
-# I feel this is a little hacky, but its robust to whatever the current working
-# directory might be (assuming this is run as the main script)
-sys.path.append(os.path.join(sys.path[0], ".."))
-from examples.small import get_path_based, get_high_cost
-from tools.qubo_tools import QUBOContainer
+from ..examples.small import get_path_based, get_high_cost
+from ..tools.qubo_tools import QUBOContainer
 
-logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 def test():
     """ Test the path-based formulation with the small example """
-    logging.info("Path based:")
+    logger.info("Path based:")
     r_p = get_path_based()
     r_p.make_feasible(get_high_cost())
     soln = r_p.feasible_solution
     routes = r_p.get_routes(soln)
-    print("Routes:")
+    logger.info("Routes:")
     for r in routes:
-        print(r)
+        logger.info(r)
 
     # Get a QUBO representation of the feasibility problem
     Q, c = r_p.get_qubo(feasibility=True)
@@ -37,6 +32,3 @@ def test():
     A_eq, b_eq, _, _ = r_p.get_constraint_data()
     assert np.isclose(0, np.linalg.norm(A_eq.dot(soln) - b_eq)), "Linear constraints not satisfied"
     return
-
-if __name__ == "__main__":
-    test()

@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
 """
-Created on Mon Sep 30 16:37:45 2019
-
-@author: smharwo
+30 September 2019
+SM Harwood
 
 Test instances for Stanford/Cornell:
 vary TimeHorizon and number of routes added to get different size problems
@@ -11,8 +9,8 @@ import os
 import argparse
 from functools import partial
 import numpy as np
-from tools.qubo_tools import QUBOContainer, x_to_s
-from examples.mirp_g1 import get_mirp
+from vrpqubo.tools.qubo_tools import QUBOContainer, x_to_s
+from vrpqubo.examples.mirp_g1 import get_mirp
 try:
     import cplex
     from solve_w_cplex import CPLEX_FEASIBLE

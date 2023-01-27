@@ -6,7 +6,7 @@ An example inspired by MIRPLib Group 1 instance
 https://mirplib.scl.gatech.edu/sites/default/files/LR1_2_DR1_3_VC2_V6a.txt
 Some modifications
 """
-from formulations import MIRP
+from ..applications import MIRP
 
 def get_mirp(time_horizon):
     """

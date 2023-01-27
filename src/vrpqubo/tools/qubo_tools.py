@@ -1,3 +1,7 @@
+"""
+Tools for defining and manipulating Quadratic Unconstrained Binary Optimization
+(QUBO) problems
+"""
 import datetime
 import numpy as np
 import scipy.sparse as sp

@@ -8,7 +8,7 @@ routing problem with time windows"
 to test stuff
 """
 import numpy as np
-from formulations import (
+from ..formulations import (
     VRPTW,
     ArcBasedRoutingProblem,
     PathBasedRoutingProblem,

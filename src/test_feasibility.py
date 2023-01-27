@@ -8,8 +8,8 @@ import os
 import argparse
 import numpy as np
 import scipy.sparse as sp
-from tools.qubo_tools import s_to_x
-from tools.test_tools import loadSpins
+from vrpqubo.tools.qubo_tools import s_to_x
+from vrpqubo.tools.test_tools import loadSpins
 
 def main():
     parser = argparse.ArgumentParser(description=

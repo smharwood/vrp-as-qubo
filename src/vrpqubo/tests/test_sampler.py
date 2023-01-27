@@ -2,15 +2,10 @@
 SM Harwood
 19 October 2022
 """
-import os
-import sys
 import logging
-# I feel this is a little hacky, but its robust to whatever the current working
-# directory might be
-sys.path.append(os.path.join(sys.path[0], ".."))
-from formulations.path_based_rp import get_sampled_key as sampler
+from ..formulations.path_based_rp import get_sampled_key as sampler
 
-logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 def test(explore=1):
     """ Test sampler in path_based_rp """
@@ -20,7 +15,4 @@ def test(explore=1):
     for _ in range(N):
         k, _ = sampler(testD, explore)
         counts[k] = counts[k] + 1
-    print(counts)
-
-if __name__ == "__main__":
-    test()
+    logger.info(counts)
