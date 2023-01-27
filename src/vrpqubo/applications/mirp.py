@@ -4,10 +4,16 @@ SM Harwood
 """
 from itertools import product
 import numpy as np
-from .vrptw import VRPTW
-from .arc_based_rp import ArcBasedRoutingProblem
-from .path_based_rp import PathBasedRoutingProblem
-from .sequence_based_rp import SequenceBasedRoutingProblem
+from ..formulations import (
+    VRPTW,
+    ArcBasedRoutingProblem,
+    PathBasedRoutingProblem,
+    SequenceBasedRoutingProblem
+)
+# from .vrptw import VRPTW
+# from .arc_based_rp import ArcBasedRoutingProblem
+# from .path_based_rp import PathBasedRoutingProblem
+# from .sequence_based_rp import SequenceBasedRoutingProblem
 
 class MIRP:
     """
