@@ -7,10 +7,11 @@ Created on Thu Dec 20 11:18:24 2018
 Some tools to assess Ising matrices
 Note that these methods prefer to work with sparse matrices
 """
-import os.path, argparse
+import os.path
+import argparse
 import numpy as np
 import scipy.sparse
-import QUBOTools as QT
+from . import qubo_tools as QT
 
 def main():
     parser = argparse.ArgumentParser(description=
@@ -78,7 +79,7 @@ def main():
         bestObj, bestSpin = exhaustiveSearch(matrix, constant)
         print("\nBest objective = {} at {}".format(bestObj, bestSpin))
 
-        
+
 def loadSpins(filename):
     """
     Read spins saved in textfile
@@ -89,8 +90,8 @@ def loadSpins(filename):
         lines = f.readlines()
         spins = np.array([int(float(s)) for line in lines for s in line.split()], dtype=np.short)
         return spins
-        
-    
+
+
 def loadMatrix(filename, comment_char):
     """
     Load matrix defining problem, EITHER QUBO or Ising

@@ -11,7 +11,7 @@ import os
 import argparse
 from functools import partial
 import numpy as np
-from QUBOTools import QUBOContainer, x_to_s
+from tools.qubo_tools import QUBOContainer, x_to_s
 from examples.mirp_g1 import get_mirp
 try:
     import cplex
@@ -20,6 +20,33 @@ try:
 except ImportError:
     HAVE_CPLEX = False
 
+def main():
+    """ Build a set of test problems """
+    parser = argparse.ArgumentParser(description=
+        "Build a set of test problems\n\n"+
+        "For example, running\n"+
+        "python generate_test_set.py -p TestSet -t 20 30 40 50\n"+
+        "builds a test set in the folder \"TestSet\" with 24 total instances\n"+
+        "(\"feasibility\" and \"optimality\" versions for each of three different formulations\n"+
+        "for each of the four time horizons given)\n\n"+
+        "Each file has the name \"test_<formulation>_<size>_<class>.rudy\"\n"+
+        "where <formulation> indicates which formulation is used,\n"+
+        "      <size> indicates the number of variables,\n"+
+        "      <class> indicates whether its a feasibility problem "+
+        "(\'f\', optimal value is zero) or not (\'o\')",
+        formatter_class=argparse.RawTextHelpFormatter)
+    parser.add_argument('-p','--prefix', type=str, default='.',
+                        help="Folder to put these test problem definitions")
+    parser.add_argument('-t','--time_horizons', nargs='+', type=float,
+                        help="Time horizons of problems to generate")
+    args = parser.parse_args()
+    if args.time_horizons is None:
+        parser.print_help()
+        return
+    if not os.path.isdir(args.prefix):
+        os.mkdir(args.prefix)
+    gen(args.prefix, args.time_horizons)
+    return
 
 def gen(prefix, horizons):
     """ Generate test set """
@@ -89,33 +116,6 @@ def gen(prefix, horizons):
                     for spin in spins:
                         spin_file.write(f"{int(spin)}\n")
     return
-
-def main():
-    """ Build a set of test problems """
-    parser = argparse.ArgumentParser(description=
-        "Build a set of test problems\n\n"+
-        "For example, running\n"+
-        "python generate_test_set.py -p TestSet -t 20 30 40 50\n"+
-        "builds a test set in the folder \"TestSet\" with 24 total instances\n"+
-        "(\"feasibility\" and \"optimality\" versions for each of three different formulations\n"+
-        "for each of the four time horizons given)\n\n"+
-        "Each file has the name \"test_<formulation>_<size>_<class>.rudy\"\n"+
-        "where <formulation> indicates which formulation is used,\n"+
-        "      <size> indicates the number of variables,\n"+
-        "      <class> indicates whether its a feasibility problem "+
-        "(\'f\', optimal value is zero) or not (\'o\')",
-        formatter_class=argparse.RawTextHelpFormatter)
-    parser.add_argument('-p','--prefix', type=str, default='.',
-                        help="Folder to put these test problem definitions")
-    parser.add_argument('-t','--time_horizons', nargs='+', type=float,
-                        help="Time horizons of problems to generate")
-    args = parser.parse_args()
-    if args.time_horizons is None:
-        parser.print_help()
-        return
-    if not os.path.isdir(args.prefix):
-        os.mkdir(args.prefix)
-    gen(args.prefix, args.time_horizons)
 
 if __name__ == "__main__":
     main()

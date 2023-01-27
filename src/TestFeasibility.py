@@ -4,11 +4,12 @@ SM Harwood
 
 Tool to test feasibility of spins in original (hard-constrained) problem
 """
-import os, argparse
+import os
+import argparse
 import numpy as np
 import scipy.sparse as sp
-from QUBOTools import s_to_x
-from TestTools import loadSpins
+from tools.qubo_tools import s_to_x
+from tools.test_tools import loadSpins
 
 def main():
     parser = argparse.ArgumentParser(description=

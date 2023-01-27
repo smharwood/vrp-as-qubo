@@ -10,7 +10,7 @@ import numpy as np
 # directory might be (assuming this is run as the main script)
 sys.path.append(os.path.join(sys.path[0], ".."))
 from examples.small import get_sequence_based, get_high_cost
-from QUBOTools import QUBOContainer
+from tools.qubo_tools import QUBOContainer
 
 logging.basicConfig(level=logging.DEBUG)
 

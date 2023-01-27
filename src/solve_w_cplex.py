@@ -11,8 +11,8 @@ import argparse
 import cplex
 import numpy as np
 import scipy.sparse as sp
-import TestTools as TT
-import QUBOTools as QT
+import tools.test_tools as TT
+import tools.qubo_tools as QT
 # cplex status strings that indicate at least a feasible solution found?
 CPLEX_FEASIBLE = ["integer optimal solution", "integer optimal, tolerance",
     "solution limit exceeded"]
