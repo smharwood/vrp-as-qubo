@@ -61,8 +61,10 @@
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-This document describes a way to transform a maritime inventory routing problem (MIRP) into a related problem in the form of a quadratic unconstrained binary optimization problem (QUBO).
-The motivation is that emerging hardware such as physical (quantum) annealers could then be used to obtain useful solutions.
+This documentation is largely superseded by the publication \cite{harwood2021formulating}.
+That paper describes the formulations that are implemented with the accompanying code.
+However, for completeness, this document describes some of the basic structure of the maritime inventory routing problem (MIRP), as well as an early version of the ``path-based'' formulation of it and its transformation to a quadratic unconstrained binary optimization problem (QUBO).
+% The motivation is that emerging hardware such as physical (quantum) annealers could then be used to obtain useful solutions.
 
 \section{Introduction}
 Inventory routing problems are a class of optimization problems often encountered in logistics and operations research.
@@ -509,31 +511,9 @@ These dummy nodes, like any other node, must be visited exactly once by a route 
 thus a ship must be used exactly once, although we can add arcs from the dummy node immediately back to the depot, allowing for a ship to ``exit'' without ever being used.
 
 \subsection{Generating routes}
-
-% TODO: use optimal basis of LP relaxation of \eqref{vrptw} to populate candidate routes?
-As mentioned earlier, the number of routes may be so large as to preclude enumerating them.
-Consequently, we use an approximate dynamic programming-type approach to generate the set of routes $R$.
-The assumption is that we have already obtained the MIRP in the VRPTW form \eqref{vrptw}, or at least have the data to do so.
-The basic idea is that, given a value function (estimate) over the nodes, a route may be generated node by node, by starting at the depot then choosing the next node by minimizing the arc cost plus the value function at the next node (``cost-to-go'').
-This is repeated until the route returns to the depot.
-At each step, the value function estimate is updated with this minimizing cost-to-go.
-
-Better exploration, and a more diverse set of routes, is obtained by adding randomization when choosing the next node.
-So if the value function is $v(i)$ and the route constructed so far is $(i_0,i_1,\dots, i_k)$, then the next node is chosen by sampling from the distribution obtained from applying the softmax to the negative cost-to-go values:
-\[
-i_{k+1} \sim P(i | i_k) \equiv \frac{\exp\big( (-c_{i_k,i} - v(i))/S_k \big)}{\smallsum_j \exp((-c_{i_k,j} - v(j))/S_k)}.
-\]
-$S_k > 0$ is a scaling factor that roughly controls how much exploration is performed;
-as $S_k \to +\infty$, the distribution approaches a uniform distribution and more exploration occurs,
-while $S_k \to 0$ will sample the lowest cost-to-go node much more often.
-However, we still update the value function with the minimizing cost-to-go value, i.e. 
-\[
-	v(i_k) \gets \min_j \set{ c_{i_k,j} + v(j) }.
-\]
-% Rather than updating with the true minimizing cost-to-go
-
-While constructing a route, the data associated with it ($c_r$, $\delta_{i,r}$) is saved, and then the process repeats, saving the previous value function for constructing the next route.
-In this way, we should tend to produce better and better routes, without repeating previously generated routes too often.
+There are many options here.
+In this work, a greedy search heuristic is used;
+see \cite{harwood2021formulating}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
