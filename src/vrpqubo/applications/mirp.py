@@ -2,6 +2,7 @@
 SM Harwood
 17 October 2022
 """
+from typing import Tuple, Callable
 from itertools import product
 import numpy as np
 from ..routing_problem import (
@@ -18,8 +19,8 @@ class MIRP:
     """
     def __init__(
             self,
-            cargo_size,
-            time_horizon
+            cargo_size: float,
+            time_horizon: float
         ):
         self.cargo_size = cargo_size
         self.time_horizon = time_horizon
@@ -44,11 +45,11 @@ class MIRP:
         self.pbrp = None
         self.sbrp = None
 
-    def add_node(self, name, demand, time_window):
+    def add_node(self, name: str, demand: float, time_window: Tuple(float)):
         """ Add a node to the underlying VRPTW graph """
         return self.vrptw.add_node(name, demand, time_window)
 
-    def add_arc(self, origin, destination, travel_time, cost):
+    def add_arc(self, origin: str, destination: str, travel_time: float, cost: float):
         """ Add an arc to the underlying VRPTW graph """
         return self.vrptw.add_arc(origin, destination, travel_time, cost)
 
@@ -57,7 +58,7 @@ class MIRP:
             inventory_init,
             inventory_rate,
             inventory_cap,
-        ):
+        ) -> Tuple[float]:
         """
         Determine the time window of this node. A single physical port must be
         visited multiple times as it runs out of inventory or fills up its storage
@@ -99,11 +100,11 @@ class MIRP:
             return (tw0, tw1)
 
     def add_nodes(self,
-            name,
-            inventory_init,
-            inventory_rate,
-            inventory_cap
-        ):
+            name: str,
+            inventory_init: float,
+            inventory_rate: float,
+            inventory_cap: float
+        ) -> list[str]:
         """
         Add nodes for this supply or demand port. A single physical port must be
         visited multiple times as it runs out of inventory or fills up its storage
@@ -152,11 +153,11 @@ class MIRP:
         return node_names
 
     def add_travel_arcs(self,
-            distance_function,
-            vessel_speed,
-            cost_per_unit_distance,
-            supply_port_fees,
-            demand_port_fees
+            distance_function: Callable[[str, str], float],
+            vessel_speed: float,
+            cost_per_unit_distance: float,
+            supply_port_fees: list[float],
+            demand_port_fees: list[float]
         ):
         """
         Add main travel arcs between any supply port and any demand port (and vice versa)
@@ -176,7 +177,7 @@ class MIRP:
                     self.add_arc(d_node, s_node, travel_time, travel_cost + supply_port_fees[s_p])
         return
 
-    def add_entry_arcs(self, time_limit, travel_time=0, cost=0):
+    def add_entry_arcs(self, time_limit: float, travel_time: float=0, cost: float=0):
         """
         Add entry arcs from depot to any Supply node with time window less than
         `time_limit`
@@ -203,7 +204,7 @@ class MIRP:
                     self.add_arc(dummy, node, travel_time, cost)
         return
 
-    def add_exit_arcs(self, travel_time=0, cost=0):
+    def add_exit_arcs(self, travel_time: float=0, cost: float=0):
         """
         Add exit arcs (back to Depot) from any "regular" supply/demand node
         """
@@ -213,7 +214,7 @@ class MIRP:
                 self.add_arc(node, depot_name, travel_time, cost)
         return
 
-    def estimate_high_cost(self):
+    def estimate_high_cost(self) -> float:
         """
         Estimate a "high cost" as approximately the cost of a very expensive route.
         Look at the port that must be visited the most often, then multiply the
@@ -224,7 +225,7 @@ class MIRP:
         costs = [arc.get_cost() for arc in self.vrptw.arcs.values()]
         return 2*max(costs)*most_trips
 
-    def get_arc_based(self, make_feasible=True):
+    def get_arc_based(self, make_feasible: bool=True) -> ArcBasedRoutingProblem:
         """
         Return the arc-based routing problem object
         Build if necessary, including defining the time periods in some way
@@ -256,7 +257,7 @@ class MIRP:
             self.abrp.make_feasible(high_cost)
         return self.abrp
 
-    def get_path_based(self, make_feasible=True):
+    def get_path_based(self, make_feasible: bool=True) -> PathBasedRoutingProblem:
         """
         Return the path-based routing problem object
         Build if necessary, including constructing routes
@@ -287,7 +288,10 @@ class MIRP:
             self.pbrp.make_feasible(high_cost)
         return self.pbrp
 
-    def get_sequence_based(self, make_feasible=True, strict=True):
+    def get_sequence_based(self,
+            make_feasible: bool=True,
+            strict: bool=True
+        ) -> SequenceBasedRoutingProblem:
         """
         Return the sequence-based routing problem object
         Build if necessary, including setting number of vehicles and sequence numbers
