@@ -85,9 +85,6 @@ class ConstantSampler(SimpleSampler):
         self.constant = constant
 
     def rvs(self, size: int=1):
-        if size == 1:
-            return self.constant
-        # else
         return self.constant*np.ones(size)
 
 class NegatedSampler(SimpleSampler):
