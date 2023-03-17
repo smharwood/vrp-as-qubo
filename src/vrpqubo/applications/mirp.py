@@ -2,6 +2,7 @@
 SM Harwood
 17 October 2022
 """
+import logging
 from typing import Tuple, Callable
 from itertools import product
 import numpy as np
@@ -11,6 +12,8 @@ from ..routing_problem import (
     PathBasedRoutingProblem,
     SequenceBasedRoutingProblem
 )
+
+logger = logging.getLogger(__name__)
 
 class MIRP:
     """
@@ -45,7 +48,7 @@ class MIRP:
         self.pbrp = None
         self.sbrp = None
 
-    def add_node(self, name: str, demand: float, time_window: Tuple(float)):
+    def add_node(self, name: str, demand: float, time_window: Tuple[float]):
         """ Add a node to the underlying VRPTW graph """
         return self.vrptw.add_node(name, demand, time_window)
 
@@ -156,8 +159,8 @@ class MIRP:
             distance_function: Callable[[str, str], float],
             vessel_speed: float,
             cost_per_unit_distance: float,
-            supply_port_fees: list[float],
-            demand_port_fees: list[float]
+            supply_port_fees: dict[str, float],
+            demand_port_fees: dict[str, float]
         ):
         """
         Add main travel arcs between any supply port and any demand port (and vice versa)
@@ -191,6 +194,7 @@ class MIRP:
         for port in self.supply_ports:
             for node in self.port_mapping[port]:
                 if self.vrptw.get_node(node).time_window[1] < time_limit:
+                    logger.debug("Adding entry arc to %s", node)
                     self.add_arc(depot_name, node, travel_time, cost)
 
         num_dum = 0
@@ -200,6 +204,7 @@ class MIRP:
                     dummy = f"Dum{num_dum}"
                     num_dum += 1
                     self.vrptw.add_node(dummy, -self.cargo_size)
+                    logger.debug("Adding entry arc to %s", node)
                     self.add_arc(depot_name, dummy, 0, 0)
                     self.add_arc(dummy, node, travel_time, cost)
         return
@@ -310,3 +315,6 @@ class MIRP:
             high_cost = self.estimate_high_cost()
             self.sbrp.make_feasible(high_cost)
         return self.sbrp
+
+    def __str__(self):
+        return f"Time horizon: {self.time_horizon}\n" + str(self.vrptw)

@@ -179,3 +179,15 @@ class VRPTW:
             if arc[1] == self.depot_index:
                 num_incoming += 1
         return min(num_outgoing, num_incoming)
+
+    def __str__(self):
+        full_str = f"Depot index: {self.depot_index}\n"
+        full_str += f"Vehicle Capacity: {self.vehicle_cap}\n"
+        full_str += f"Initial loading: {self.initial_loading}\n"
+        full_str += "Nodes:\n"
+        for node in self.nodes:
+            full_str += str(node) + "\n"
+        full_str += "Arcs:\n"
+        for arc in self.arcs.values():
+            full_str += str(arc) + "\n"
+        return full_str

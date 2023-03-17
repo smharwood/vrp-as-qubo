@@ -10,8 +10,6 @@ import importlib
 import logging
 import re
 
-logging.basicConfig(level=logging.DEBUG)
-
 def main():
     """ Run unit tests """
     parser = argparse.ArgumentParser(description=
@@ -19,7 +17,14 @@ def main():
         formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument("tests", nargs='+',
                         help="Name of test(s) to run, or 'all'")
+    parser.add_argument("-d","--debug", action="store_true",
+                        help="Log at DEBUG level")
     args = parser.parse_args()
+
+    if args.debug:
+        logging.basicConfig(level=logging.DEBUG)
+    else:
+        logging.basicConfig(level=logging.INFO)
 
     reg = re.compile(r"test_.*py")
     if args.tests[0] == "all":

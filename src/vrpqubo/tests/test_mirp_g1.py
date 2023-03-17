@@ -12,6 +12,7 @@ def test():
     mirp = get_mirp(31)
     names = ["arc", "path", "sequence"]
     getters = [mirp.get_arc_based, mirp.get_path_based, mirp.get_sequence_based]
+    logger.info(mirp)
 
     for name, getter in zip(names, getters):
         logger.info("\n%s-based:", name)
