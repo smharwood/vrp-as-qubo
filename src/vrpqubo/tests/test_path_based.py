@@ -3,32 +3,27 @@ SM Harwood
 19 October 2022
 """
 import logging
-import numpy as np
-from ..examples.small import get_path_based, get_high_cost
-from ..tools.qubo_tools import QUBOContainer
+import unittest
+from ..routing_problem.formulations.path_based_rp import get_sampled_key as sampler
 
-logger = logging.getLogger(__name__)
+class TestPathBased(unittest.TestCase):
+    """ Test elements of path_based_rp """
+    logger = logging.getLogger(__name__)
 
-def test():
-    """ Test the path-based formulation with the small example """
-    logger.info("Path based:")
-    r_p = get_path_based()
-    r_p.make_feasible(get_high_cost())
-    soln = r_p.feasible_solution
-    routes = r_p.get_routes(soln)
-    logger.info("Routes:")
-    for r in routes:
-        logger.info(r)
-
-    # Get a QUBO representation of the feasibility problem
-    Q, c = r_p.get_qubo(feasibility=True)
-    qubo = QUBOContainer(Q, c)
-
-    # soln is feasible, we expect that when evaluated in the QUBO it gives
-    # a zero objective
-    assert 0 == qubo.evaluate_QUBO(soln), "QUBO objective not zero"
-
-    # test whether constraints are satisfied
-    A_eq, b_eq, _, _ = r_p.get_constraint_data()
-    assert np.isclose(0, np.linalg.norm(A_eq.dot(soln) - b_eq)), "Linear constraints not satisfied"
-    return
+    def test_sampler(self):
+        """ Test sampler in path_based_rp """
+        test_dict = { 'a':100, 'b':101, 'c':102, 'd':10 }
+        sample_counts = { k : 0 for k in test_dict.keys() }
+        min_counts = { k : 0 for k in test_dict.keys() }
+        N = 10000
+        for _ in range(N):
+            k_samp, k_min = sampler(test_dict, explore=0)
+            sample_counts[k_samp] += 1
+            min_counts[k_min] += 1
+        self.logger.debug(sample_counts)
+        self.assertEqual(min_counts['d'], N,
+            "Wrong number of counts for minimum"
+        )
+        self.assertEqual(sample_counts, min_counts,
+            "Sample counts with no exploration is wrong"
+        )
