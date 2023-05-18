@@ -2,13 +2,15 @@
 27 Jan 2023
 SM Harwood
 
-Run unit-ish tests for vrpqubo package
+A hacky way to run unit-ish tests for vrpqubo package.
+But it allows setting logging level
 """
 import os
 import argparse
 import importlib
 import logging
 import re
+import unittest
 
 def main():
     """ Run unit tests """
@@ -36,10 +38,10 @@ def main():
     # go through the given tests, and try to run test() method
     for test in tests:
         test = test.split('.')[0]
-        print("\n")
         try:
             test_mod = importlib.import_module(f"vrpqubo.tests.{test}")
-            test_mod.test()
+            # this is a little hacky...
+            unittest.main(test_mod, exit=False, argv=[os.path.basename(__file__)])
         except (ModuleNotFoundError, AttributeError) as error:
             print(error)
 

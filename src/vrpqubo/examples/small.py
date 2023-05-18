@@ -7,6 +7,7 @@ Desrochers, Desrosiers, Solomon, "A new optimization algorithm for the vehicle
 routing problem with time windows"
 to test stuff
 """
+import logging
 import numpy as np
 from ..routing_problem import (
     VRPTW,
@@ -14,6 +15,8 @@ from ..routing_problem import (
     PathBasedRoutingProblem,
     SequenceBasedRoutingProblem
 )
+
+logger = logging.getLogger(__name__)
 
 def get_vrptw():
     """ Get the basic VRPTW data """
@@ -88,9 +91,9 @@ def get_path_based():
     routes[12]= ['D'] # is this feasible? no
 
     for route in routes:
-        f, _ = pbrp.add_route(route)
-        if not f:
-            print(f"{route} not feasible")
+        feas, _ = pbrp.add_route(route)
+        if not feas:
+            logger.debug("Not feasible: %s", route)
     return pbrp
 
 def get_sequence_based(max_vehicles=2, max_sequence_length=4):
