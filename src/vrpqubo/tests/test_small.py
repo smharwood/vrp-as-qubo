@@ -30,7 +30,7 @@ class TestSmall(unittest.TestCase):
         self.generic_tester(get_sequence_based, "Sequence based")
 
     def generic_tester(self, getter, form_name):
-        """ Generic tester, given inputs"""
+        """ Test the construction heuristic and constraint data """
         self.logger.info("%s:", form_name)
         r_p = getter()
         r_p.make_feasible(get_high_cost())

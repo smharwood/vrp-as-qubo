@@ -12,6 +12,7 @@ from vrpqubo.tools.qubo_tools import s_to_x
 from vrpqubo.tools.test_tools import loadSpins
 
 def main():
+    """Test feasibility of spins"""
     parser = argparse.ArgumentParser(description=
         "Test feasibility of spins\n\n"+
         "Test set should include *.npz files; "+
@@ -32,9 +33,9 @@ def main():
     if args.prefix is not None:
         no_action = False
         results = do_all(args.prefix)
-        for k in results.keys():
-            print("\nSolution {}:".format(k))
-            print_summary(*results[k])
+        for key, res in results.items():
+            print(f"\nSolution {key}:")
+            print_summary(*res)
     if (args.data is not None) and (args.spins is not None):
         no_action = False
         vio_l, vio_q, nnz = convenience(args.data, args.spins)
@@ -44,9 +45,10 @@ def main():
     return
 
 def print_summary(vio_l, vio_q, nnz):
+    """Nice print of violations and other stats"""
     print("Number of UNsatisfied constraints:")
-    print("Linear:    {} out of {}".format(sum(vio_l), len(vio_l)))
-    print("Quadratic: {} out of {}".format(int(vio_q), nnz))
+    print(f"Linear:    {sum(vio_l)} out of {len(vio_l)}")
+    print(f"Quadratic: {int(vio_q)} out of {nnz}")
     return
 
 def test_feasibility(x, A_eq, b_eq, Q_eq, r_eq):
@@ -76,6 +78,7 @@ def test_feasibility(x, A_eq, b_eq, Q_eq, r_eq):
     return vio_l, vio_q, Q_eq.nnz
 
 def convenience(fname, sname):
+    """Load info from files and test feasibility"""
     spins = loadSpins(sname)
     x = s_to_x(spins)
     f = np.load(fname, allow_pickle=True)
@@ -105,14 +108,15 @@ def do_all(prefix, verbose=True):
     results = dict()
     for f in fnames:
         if f.split('.')[-1] == "npz":
-            if verbose: print("Processing {}...".format(f))
+            if verbose:
+                print(f"Processing {f}...")
             sol_fn = os.path.splitext(f)[0] + ".sol"
             sol_path = os.path.join(prefix, sol_fn)
             f_path = os.path.join(prefix, f)
             if os.path.isfile(sol_path):
                 results[sol_fn] = convenience(f_path, sol_path)
             elif verbose:
-                print("Could not find corresponding solution file {}".format(sol_path))
+                print(f"Could not find corresponding solution file {sol_path}")
     return results
 
 if __name__ == "__main__":
