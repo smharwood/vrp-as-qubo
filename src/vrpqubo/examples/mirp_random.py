@@ -4,6 +4,7 @@ SM Harwood
 
 Random MIRP generator
 """
+from dataclasses import dataclass
 from typing import Optional, Union
 from numbers import Real
 import numpy as np
@@ -12,54 +13,40 @@ from scipy.stats import uniform
 from ..tools.sampling import WrapperSampler, Sampleable, Sampleable_Type, RVT
 from ..applications import MIRP
 
+def sample(vari, size: int=1):
+    """
+    Sample anything.
+    If not sampleable, return appropriate size array of constant values
+    """
+    if isinstance(vari, Sampleable_Type):
+        return vari.rvs(size)
+    if np.isscalar(vari) and size == 1:
+        # else, if the right size, return the object itself
+        return vari
+    if len(vari) == size:
+        return vari
+    raise ValueError("Variable to sample is not the right length")
+
+@dataclass
 class RandomMIRP:
     """
     A class to construct random instances of a Maritime Inventory Routing Problem
     """
-    def __init__(self,
-            cargo_size: Union[Real,Sampleable],
-            time_horizon: Union[Real,Sampleable],
-            num_supply_ports: Union[int,Sampleable],
-            num_demand_ports: Union[int,Sampleable],
-            inventory_init_supply: Union[ArrayLike,Sampleable],
-            inventory_init_demand: Union[ArrayLike,Sampleable],
-            inventory_rate_supply: Union[ArrayLike,Sampleable],
-            inventory_rate_demand: Union[ArrayLike,Sampleable],
-            inventory_cap_supply:  Union[ArrayLike,Sampleable],
-            inventory_cap_demand:  Union[ArrayLike,Sampleable],
-            travel_times: Union[ArrayLike,Sampleable],
-            travel_cost_per_unit_time: Optional[Union[Real,Sampleable]]=None,
-            supply_port_fees: Optional[Union[ArrayLike,Sampleable]]=None,
-            demand_port_fees: Optional[Union[ArrayLike,Sampleable]]=None,
-            seed: Optional[int]=None
-        ):
-        self.cargo_size = cargo_size
-        self.time_horizon = time_horizon
-        self.num_supply_ports = num_supply_ports
-        self.num_demand_ports = num_demand_ports
-        if np.isscalar(inventory_init_supply):
-            inventory_init_supply = inventory_init_supply*np.ones(1)
-        if np.isscalar(inventory_init_demand):
-            inventory_init_demand = inventory_init_demand*np.ones(1)
-        if np.isscalar(inventory_rate_supply):
-            inventory_rate_supply = inventory_rate_supply*np.ones(1)
-        if np.isscalar(inventory_rate_demand):
-            inventory_rate_demand = inventory_rate_demand*np.ones(1)
-        if np.isscalar(inventory_cap_supply):
-            inventory_cap_supply = inventory_cap_supply*np.ones(1)
-        if np.isscalar(inventory_cap_demand):
-            inventory_cap_demand = inventory_cap_demand*np.ones(1)
-        self.inventory_init_supply = inventory_init_supply
-        self.inventory_init_demand = inventory_init_demand
-        self.inventory_rate_supply = inventory_rate_supply
-        self.inventory_rate_demand = inventory_rate_demand
-        self.inventory_cap_supply = inventory_cap_supply
-        self.inventory_cap_demand = inventory_cap_demand
-        self.travel_times = travel_times
-        self.travel_cost_per_unit_time = travel_cost_per_unit_time
-        self.supply_port_fees = supply_port_fees
-        self.demand_port_fees = demand_port_fees
-        self.seed = seed
+    cargo_size: Union[Real,Sampleable]
+    time_horizon: Union[Real,Sampleable]
+    num_supply_ports: Union[int,Sampleable]
+    num_demand_ports: Union[int,Sampleable]
+    inventory_init_supply: Union[ArrayLike,Sampleable]
+    inventory_init_demand: Union[ArrayLike,Sampleable]
+    inventory_rate_supply: Union[ArrayLike,Sampleable]
+    inventory_rate_demand: Union[ArrayLike,Sampleable]
+    inventory_cap_supply:  Union[ArrayLike,Sampleable]
+    inventory_cap_demand:  Union[ArrayLike,Sampleable]
+    travel_times: Union[ArrayLike,Sampleable]
+    travel_cost_per_unit_time: Optional[Union[Real,Sampleable]]=None
+    supply_port_fees: Optional[Union[ArrayLike,Sampleable]]=None
+    demand_port_fees: Optional[Union[ArrayLike,Sampleable]]=None
+    seed: Optional[int]=None
 
     def get_random_mirp(self, size: int=1):
         """
@@ -71,72 +58,39 @@ class RandomMIRP:
         mirps = []
         for _ in range(size):
             # For any input that is a distribution/random variable, sample it
-            if isinstance(self.time_horizon, Sampleable_Type):
-                time_horizon = self.time_horizon.rvs()
-            else:
-                time_horizon = self.time_horizon
-
-            if isinstance(self.cargo_size, Sampleable_Type):
-                cargo_size = self.cargo_size.rvs()
-            else:
-                cargo_size = self.cargo_size
-
-            if isinstance(self.num_supply_ports, Sampleable_Type):
-                num_supply_ports = self.num_supply_ports.rvs()
-            else:
-                num_supply_ports = self.num_supply_ports
-
-            if isinstance(self.num_demand_ports, Sampleable_Type):
-                num_demand_ports = self.num_demand_ports.rvs()
-            else:
-                num_demand_ports = self.num_demand_ports
+            time_horizon = sample(self.time_horizon)
+            cargo_size = sample(self.cargo_size)
+            num_supply_ports = sample(self.num_supply_ports)
+            num_demand_ports = sample(self.num_demand_ports)
 
             # Supply
-            if isinstance(self.inventory_init_supply, Sampleable_Type):
-                inventory_init_supply = self.inventory_init_supply.rvs(size=num_supply_ports)
-            else:
-                inventory_init_supply = np.asarray(self.inventory_init_supply)
+            inventory_init_supply = sample(self.inventory_init_supply, size=num_supply_ports)
             assert (inventory_init_supply > 0).all(), "Supply initial inventory should be positive"
             assert len(inventory_init_supply) == num_supply_ports, \
                 "Length of inventory_init_supply is incorrect"
 
-            if isinstance(self.inventory_rate_supply, Sampleable_Type):
-                inventory_rate_supply = self.inventory_rate_supply.rvs(size=num_supply_ports)
-            else:
-                inventory_rate_supply = np.asarray(self.inventory_rate_supply)
+            inventory_rate_supply = sample(self.inventory_rate_supply, size=num_supply_ports)
             assert (inventory_rate_supply > 0).all(), "Supply inventory rate should be positive"
             assert len(inventory_rate_supply) == num_supply_ports, \
                 "Length of inventory_rate_supply is incorrect"
 
-            if isinstance(self.inventory_cap_supply, Sampleable_Type):
-                inventory_cap_supply = self.inventory_cap_supply.rvs(size=num_supply_ports)
-            else:
-                inventory_cap_supply = np.asarray(self.inventory_cap_supply)
+            inventory_cap_supply = sample(self.inventory_cap_supply, size=num_supply_ports)
             assert (inventory_cap_supply > 0).all(), "Supply inventory capacity should be positive"
             assert len(inventory_cap_supply) == num_supply_ports, \
                 "Length of inventory_cap_supply is incorrect"
 
             # Demand
-            if isinstance(self.inventory_init_demand, Sampleable_Type):
-                inventory_init_demand = self.inventory_init_demand.rvs(size=num_demand_ports)
-            else:
-                inventory_init_demand = np.asarray(self.inventory_init_demand)
+            inventory_init_demand = sample(self.inventory_init_demand, size=num_demand_ports)
             assert (inventory_init_demand > 0).all(), "demand initial inventory should be positive"
             assert len(inventory_init_demand) == num_demand_ports, \
                 "Length of inventory_init_demand is incorrect"
 
-            if isinstance(self.inventory_rate_demand, Sampleable_Type):
-                inventory_rate_demand = self.inventory_rate_demand.rvs(size=num_demand_ports)
-            else:
-                inventory_rate_demand = np.asarray(self.inventory_rate_demand)
+            inventory_rate_demand = sample(self.inventory_rate_demand, size=num_demand_ports)
             assert (inventory_rate_demand < 0).all(), "demand inventory rate should be negative"
             assert len(inventory_rate_demand) == num_demand_ports, \
                 "Length of inventory_rate_demand is incorrect"
 
-            if isinstance(self.inventory_cap_demand, Sampleable_Type):
-                inventory_cap_demand = self.inventory_cap_demand.rvs(size=num_demand_ports)
-            else:
-                inventory_cap_demand = np.asarray(self.inventory_cap_demand)
+            inventory_cap_demand = sample(self.inventory_cap_demand, size=num_demand_ports)
             assert (inventory_cap_demand > 0).all(), "demand inventory capacity should be positive"
             assert len(inventory_cap_demand) == num_demand_ports, \
                 "Length of inventory_cap_demand is incorrect"
@@ -160,28 +114,22 @@ class RandomMIRP:
             if self.travel_cost_per_unit_time is None:
                 # travel time will be proxy for cost
                 travel_cost_per_unit_time = 1.0
-            elif isinstance(self.travel_cost_per_unit_time, Sampleable_Type):
-                travel_cost_per_unit_time = self.travel_cost_per_unit_time.rvs()
             else:
-                travel_cost_per_unit_time = self.travel_cost_per_unit_time
+                travel_cost_per_unit_time = sample(self.travel_cost_per_unit_time)
             assert travel_cost_per_unit_time >= 0,\
                 "Travel cost per unit time should be non-negative"
 
             if self.supply_port_fees is None:
                 supply_port_fees = np.zeros(num_supply_ports)
-            elif isinstance(self.supply_port_fees, Sampleable_Type):
-                supply_port_fees = self.supply_port_fees.rvs(size=num_supply_ports)
             else:
-                supply_port_fees = self.supply_port_fees
+                supply_port_fees = sample(self.supply_port_fees, size=num_supply_ports)
             assert len(supply_port_fees) == num_supply_ports,\
                 "Length of supply_port_fees is incorrect"
 
             if self.demand_port_fees is None:
                 demand_port_fees = np.zeros(num_demand_ports)
-            elif isinstance(self.demand_port_fees, Sampleable_Type):
-                demand_port_fees = self.demand_port_fees.rvs(size=num_demand_ports)
             else:
-                demand_port_fees = self.demand_port_fees
+                demand_port_fees = sample(self.demand_port_fees, size=num_demand_ports)
             assert len(demand_port_fees) == num_demand_ports,\
                 "Length of demand_port_fees is incorrect"
 
