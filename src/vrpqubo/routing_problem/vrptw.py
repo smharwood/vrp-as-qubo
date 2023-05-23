@@ -17,7 +17,8 @@ class Node:
         negative demand is supply that must be picked up.
     """
     def __init__(self, name: str, demand: str, t_w: Tuple[float]):
-        assert t_w[0] <= t_w[1], f"Time window for {name} not valid: {t_w[0]} > {t_w[1]}"
+        if t_w[0] > t_w[1]:
+            raise ValueError(f"Time window for {name} not valid: {t_w[0]} > {t_w[1]}")
         self.name = name
         self.demand = demand
         self.time_window = t_w
@@ -112,7 +113,8 @@ class VRPTW:
         Add a node to the problem,
         with demand level `demand` and time window `t_w`
         """
-        assert node_name not in self.node_names, node_name + " is already in Node List"
+        if node_name in self.node_names:
+            raise ValueError(f"{node_name} is already in Node list")
         self.nodes.append(Node(node_name, demand, t_w))
         self.node_names.append(node_name)
         return
