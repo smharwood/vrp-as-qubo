@@ -147,6 +147,8 @@ class ArcBasedRoutingProblem(RoutingProblem):
 
     def get_num_variables(self):
         """ number of variables in formulation """
+        if not self.variables_enumerated:
+            self.enumerate_variables()
         return self.num_variables
 
     def get_var_index(self, node_1_index, time_1, node_2_index, time_2):
@@ -247,7 +249,7 @@ class ArcBasedRoutingProblem(RoutingProblem):
             brhs.append(1)
             row_index += 1
 
-        self.constraints_matrix = sparse.coo_matrix((aval,(arow,acol)))
+        self.constraints_matrix = sparse.coo_array((aval, (arow,acol)))
         self.constraints_rhs = np.array(brhs)
         self.constraints_built = True
         return
@@ -340,7 +342,7 @@ class ArcBasedRoutingProblem(RoutingProblem):
 #            brhs.append(1)
 #            row_index += 1
 
-        self.constraints_matrix = sparse.coo_matrix((aval,(arow,acol)))
+        self.constraints_matrix = sparse.coo_array((aval, (arow,acol)))
         self.constraints_rhs = np.array(brhs)
         self.constraints_built = True
         return
@@ -490,6 +492,21 @@ class ArcBasedRoutingProblem(RoutingProblem):
             self.objective_built = False
         return
 
+    def get_objective_data(self):
+        """
+        Return objective information in a consistent way
+        objective(x) = cᵀx + xᵀ Q x
+
+        Parameters:
+
+        Return:
+            c (array): 1-d array defining linear part of objective
+            Q (array): 2-d array defining quadratic part of objective
+        """
+        self.build_objective()
+        n = self.get_num_variables()
+        return self.objective, sparse.csr_array((n,n))
+
     def get_constraint_data(self):
         """
         Return constraints in a consistent way
@@ -512,7 +529,27 @@ class ArcBasedRoutingProblem(RoutingProblem):
         # if anything is empty, make sure its dense
         if len(b_eq) == 0:
             A_eq = A_eq.toarray()
-        return A_eq, b_eq, sparse.csr_matrix((n,n)), 0
+        return A_eq, b_eq, sparse.csr_array((n,n)), 0
+
+    def get_sufficient_penalty(self, feasibility):
+        """
+        Return a threshhold value of the penalty parameter that is sufficient
+        for penalizing the constraints when constructing a QUBO representation of
+        this problem
+
+        Parameters:
+            feasibility (bool): Whether this is for a feasibility version of the
+                problem. Sufficient penalty value can be zero
+
+        Return:
+            sufficient_pp (float): Penalty parameter value
+        """
+        if feasibility:
+            sufficient_pp = 0.0
+        else:
+            sum_arc_cost = sum(np.fabs(arc.get_cost()) for arc in self.arcs.values())
+            sufficient_pp = sum_arc_cost*len(self.time_points)**2
+        return sufficient_pp
 
     def get_qubo(self, feasibility=False, penalty_parameter=None):
         """
@@ -604,7 +641,9 @@ class ArcBasedRoutingProblem(RoutingProblem):
         # Variables: all binary
         # constraints: all equality
         var_types = [cplex_prob.variables.type.binary] * len(self.objective)
-        namer = lambda isjt: "n{}t{}_n{}t{}".format(isjt[0], isjt[1], isjt[2], isjt[3])
+        t_index = dict( (t,i) for i,t in enumerate(self.time_points))
+        def namer(isjt):
+            return f"n{isjt[0]}t{isjt[1]}_n{isjt[2]}t{isjt[3]}"
         names = list(map(namer, self.var_mapping))
         con_types = ['E'] * len(self.constraints_rhs)
         rows = self.constraints_matrix.row.tolist()

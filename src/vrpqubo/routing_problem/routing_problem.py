@@ -3,8 +3,12 @@ SM Harwood
 16 October 2022
 """
 from copy import deepcopy
+import logging
 import numpy as np
+from scipy import sparse
 from .vrptw import VRPTW
+
+logger = logging.getLogger(__name__)
 
 class RoutingProblem:
     """
@@ -108,6 +112,19 @@ class RoutingProblem:
         """
         raise NotImplementedError
 
+    def get_objective_data(self):
+        """
+        Return objective information in a consistent way
+        objective(x) = cᵀx + xᵀ Q x
+
+        Parameters:
+
+        Return:
+            c (array): 1-d array defining linear part of objective
+            Q (array): 2-d array defining quadratic part of objective
+        """
+        raise NotImplementedError
+
     def get_constraint_data(self):
         """
         Return constraints in a consistent way
@@ -125,11 +142,35 @@ class RoutingProblem:
         """
         raise NotImplementedError
 
-    def get_qubo(self, feasibility=False, penalty_parameter=None):
+    def get_sufficient_penalty(self, feasibility):
         """
-        Get the Quadratic Unconstrained Binary Optimization problem reformulation
+        Return a threshhold value of the penalty parameter that is sufficient
+        for penalizing the constraints when constructing a QUBO representation of
+        this problem
 
-        args:
+        Parameters:
+            feasibility (bool): Whether this is for a feasibility version of the
+                problem. Sufficient penalty value can be zero
+
+        Return:
+            sufficient_pp (float): Penalty parameter value
+        """
+        raise NotImplementedError
+
+    def get_qubo_new(self, feasibility=False, penalty_parameter=None):
+        """
+        Get the Quadratic Unconstrained Binary Optimization (QUBO) problem reformulation.
+        This assumes that the routing problem may be formulated as
+            minₓ cᵀx + xᵀQx
+            st
+                Ax = b
+                xᵀRx = 0
+                x ∈ {0,1}ⁿ
+        in which case an equivalent QUBO is
+            min_x cᵀx + xᵀQx + ρ(||Ax - b||² + xᵀRx)
+        for some sufficiently large parameter ρ, and appropriate handling of linear terms
+
+        Parameters:
         feasibility (bool): Get the feasibility problem (ignore the objective)
         penalty_parameter (float): value of penalty parameter to use for reformulation.
             If None, it is determined automatically
@@ -139,7 +180,39 @@ class RoutingProblem:
         c (float): a constant that makes the objective of the QUBO equal to the
             objective value of the original constrained integer program
         """
-        raise NotImplementedError
+        sufficient_pp = self.get_sufficient_penalty(feasibility)
+        if penalty_parameter is None:
+            # Make sure penalty parameter is strictly greater than the sufficient value
+            penalty_parameter = sufficient_pp + 1.0
+        if penalty_parameter <= sufficient_pp:
+            logger.warning(
+                "Penalty parameter might not be big enough...(>%s)", sufficient_pp
+            )
+
+        A_eq, b_eq, Q_eq, r_eq = self.get_constraint_data()
+        if r_eq != 0:
+            raise ValueError(
+                "QUBO construction assume quadratic constraints are of form  xᵀ Q x = 0"
+            )
+
+        # penalized Quadratic and Linear equality constraints
+        # ρ( xᵀQx + ||Ax - b||² ) = ρ( xᵀ(AᵀA + Q)x - 2bᵀAx + bᵀb )
+        # -ρ2bᵀA goes on the diagonal
+        two_bTA = -2*A_eq.transpose().dot(b_eq)
+        Q = penalty_parameter * (
+            Q_eq +
+            A_eq.transpose().dot(A_eq) +
+            sparse.diags(two_bTA)
+        )
+
+        # If not purely a feasibility problem, add in objective
+        if not feasibility:
+            c_obj, Q_obj = self.get_objective_data()
+            Q += Q_obj + sparse.diags(c_obj)
+
+        # constant term of QUBO objective
+        constant = penalty_parameter*b_eq.dot(b_eq)
+        return Q, constant
 
     def get_cplex_prob(self):
         """

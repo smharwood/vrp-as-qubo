@@ -75,7 +75,7 @@ def get_path_based():
 
     # Add/check routes
     # From paper, we know there are 11
-    routes = [None]*13
+    routes = [None]*11
     routes[0] = ['D','1','D']
     routes[1] = ['D','2','D']
     routes[2] = ['D','3','D']
@@ -87,13 +87,13 @@ def get_path_based():
     routes[8] = ['D','1','2','3','D']
     routes[9] = ['D','2','1','3','D']
     routes[10]= ['D','2','3','1','D']
-    routes[11]= ['D','2','3','1','3','D'] # infeasible to test
-    routes[12]= ['D'] # is this feasible? no
 
     for route in routes:
-        feas, _ = pbrp.add_route(route)
+        feas, added = pbrp.add_route(route)
         if not feas:
             logger.debug("Not feasible: %s", route)
+        if not added:
+            logger.debug("Not added: %s", route)
     return pbrp
 
 def get_sequence_based(max_vehicles=2, max_sequence_length=4):

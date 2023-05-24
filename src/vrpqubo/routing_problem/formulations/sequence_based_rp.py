@@ -194,6 +194,8 @@ class SequenceBasedRoutingProblem(RoutingProblem):
 
     def get_num_variables(self):
         """ Number of variables in formulation """
+        if not self.variables_enumerated:
+            self.enumerate_variables()
         return self.num_variables
 
     def get_var_index(self, vehicle_index, sequence_index, node_index):
@@ -261,7 +263,6 @@ class SequenceBasedRoutingProblem(RoutingProblem):
                             var_index = var_index_1
                         self.objective_c[var_index] += coeff
                     if quad_bool:
-                        # Add it in "symmetrically" ?
                         qrow.append(var_index_1)
                         qcol.append(var_index_2)
                         qval.append(coeff)
@@ -515,6 +516,20 @@ class SequenceBasedRoutingProblem(RoutingProblem):
             self.feasible_solution[self.get_var_index(*seq)] = 1
         return
 
+    def get_objective_data(self):
+        """
+        Return objective information in a consistent way
+        objective(x) = cᵀx + xᵀ Q x
+
+        Parameters:
+
+        Return:
+            c (array): 1-d array defining linear part of objective
+            Q (array): 2-d array defining quadratic part of objective
+        """
+        self.build_objective()
+        return self.objective_c, self.objective_q
+
     def get_constraint_data(self):
         """
         Return constraints in a consistent way
@@ -542,15 +557,23 @@ class SequenceBasedRoutingProblem(RoutingProblem):
             A_eq = A_eq.toarray()
         return A_eq, b_eq, Q_eq, r_eq
 
-    def get_sufficient_penalty(self,feasibility):
+    def get_sufficient_penalty(self, feasibility):
         """
-        Get the threshhold value of penalty parameter for penalizing constraints
-        Actual penalty value must be STRICTLY GREATER than this
+        Return a threshhold value of the penalty parameter that is sufficient
+        for penalizing the constraints when constructing a QUBO representation of
+        this problem
+
+        Parameters:
+            feasibility (bool): Whether this is for a feasibility version of the
+                problem. Sufficient penalty value can be zero
+
+        Return:
+            sufficient_pp (float): Penalty parameter value
         """
         if feasibility:
             sufficient_pp = 0.0
         else:
-            sum_arc_cost = sum([np.fabs(arc.get_cost()) for arc in self.arcs.values()])
+            sum_arc_cost = sum(np.fabs(arc.get_cost()) for arc in self.arcs.values())
             sufficient_pp = self.max_sequence_length*self.max_vehicles*sum_arc_cost
         return sufficient_pp
 
@@ -692,6 +715,7 @@ class SequenceBasedRoutingProblem(RoutingProblem):
             names=names)
 
         # Quadratic objective
+        # Divide values by 2? CPLEX claims it adds the values in symmetrically...
         rows = self.objective_q.row.tolist()
         cols = self.objective_q.col.tolist()
         vals = self.objective_q.data.tolist()

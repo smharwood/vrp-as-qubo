@@ -376,8 +376,22 @@ class PathBasedRoutingProblem(RoutingProblem):
             mp_constraints_matrix[node_indices, col_indices] = 1
         mask = np.ones(num_nodes, dtype=bool)
         mask[self.depot_index] = False
-        mp_constraints_matrix = mp_constraints_matrix[mask, :]
+        mp_constraints_matrix = sparse.csr_matrix(mp_constraints_matrix[mask, :])
         return mp_cost, mp_constraints_matrix, mp_constraints_rhs
+
+    def get_objective_data(self):
+        """
+        Return objective information in a consistent way
+        objective(x) = cᵀx + xᵀ Q x
+
+        Parameters:
+
+        Return:
+            c (array): 1-d array defining linear part of objective
+            Q (array): 2-d array defining quadratic part of objective
+        """
+        n = self.get_num_variables()
+        return np.array(self.route_costs), sparse.csr_matrix((n,n))
 
     def get_constraint_data(self):
         """
@@ -397,6 +411,25 @@ class PathBasedRoutingProblem(RoutingProblem):
         _, A_eq, b_eq = self.get_math_program_data()
         n = self.get_num_variables()
         return A_eq, b_eq, sparse.csr_matrix((n,n)), 0
+
+    def get_sufficient_penalty(self, feasibility):
+        """
+        Return a threshhold value of the penalty parameter that is sufficient
+        for penalizing the constraints when constructing a QUBO representation of
+        this problem
+
+        Parameters:
+            feasibility (bool): Whether this is for a feasibility version of the
+                problem. Sufficient penalty value can be zero
+
+        Return:
+            sufficient_pp (float): Penalty parameter value
+        """
+        if feasibility:
+            sufficient_pp = 0.0
+        else:
+            sufficient_pp = np.sum(np.fabs(cost) for cost in self.route_costs)
+        return sufficient_pp
 
     def get_qubo(self, feasibility=False, penalty_parameter=None):
         """
@@ -487,11 +520,15 @@ class PathBasedRoutingProblem(RoutingProblem):
         # constraints: all equality
         var_types = [cplex_prob.variables.type.binary] * len(mp_cost)
         con_types = ['E'] * len(mp_constraints_rhs)
-        (rows, cols) = np.nonzero(mp_constraints_matrix)
-        vals = mp_constraints_matrix[(rows, cols)]
-        rows = rows.tolist()
-        cols = cols.tolist()
-        vals = vals.tolist()
+        # (rows, cols) = np.nonzero(mp_constraints_matrix)
+        # vals = mp_constraints_matrix[(rows, cols)]
+        # rows = rows.tolist()
+        # cols = cols.tolist()
+        # vals = vals.tolist()
+        constraints_mat = sparse.coo_matrix(mp_constraints_matrix)
+        rows = constraints_mat.row.tolist()
+        cols = constraints_mat.col.tolist()
+        vals = constraints_mat.data.tolist()
 
         # Variable names: node index sequence
         # Given a route (a list of indices), convert to a single string of those indices
