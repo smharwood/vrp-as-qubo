@@ -62,7 +62,7 @@ def solve_all_isings(testset_path, first_feasible=False, verbose=True):
             # extract the correct representation,
             # convert to QUBO (so we get a problem with 0-1 variables)
             # construct the relevant CPLEX object
-            mat, c = TT.loadIsingMatrix(os.path.join(testset_path, f))
+            mat, c = TT.load_ising_matrix(os.path.join(testset_path, f))
             J, h = QT.get_Ising_J_h(mat)
             Q, c = QT.Ising_to_QUBO(J, h, c)
             cplex_prob = build_cplex_from_qubo(Q)

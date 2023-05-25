@@ -9,7 +9,7 @@ import argparse
 import numpy as np
 import scipy.sparse as sp
 from vrpqubo.tools.qubo_tools import s_to_x
-from vrpqubo.tools.test_tools import loadSpins
+from vrpqubo.tools.test_tools import load_spins
 
 def main():
     """Test feasibility of spins"""
@@ -79,7 +79,7 @@ def test_feasibility(x, A_eq, b_eq, Q_eq, r_eq):
 
 def convenience(fname, sname):
     """Load info from files and test feasibility"""
-    spins = loadSpins(sname)
+    spins = load_spins(sname)
     x = s_to_x(spins)
     f = np.load(fname, allow_pickle=True)
     A_eq = f["A_eq"]
