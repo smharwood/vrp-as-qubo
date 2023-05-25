@@ -238,17 +238,17 @@ class QUBOContainer:
             constant = self.const_qubo
             extension = ".qubo"
         contents = []
-        contents.append('{} Generated {}'.format(cchar, datetime.datetime.today()))
-        contents.append('\n{} Constant term of objective = {:.2f}'.format(cchar, constant))
+        contents.append(f"{cchar} Generated {datetime.datetime.today()}")
+        contents.append(f"\n{cchar} Constant term of objective = {constant:.2f}")
         # SentinelLineIndex = len(contents)
-        contents.append('\n{} Diagonal terms'.format(cchar))
+        contents.append(f"\n{cchar} Diagonal terms")
         nDiagonals = 0
         for i in range(N):
             value = d[i]
             if value != 0:
                 contents.append(f"\n{i:d} {i:d} {value: .2f}")
                 nDiagonals += 1
-        contents.append('\n{} Off-Diagonal terms'.format(cchar))
+        contents.append(f"\n{cchar} Off-Diagonal terms")
         nElements = 0
         (rows, cols, vals) = sp.find(Mat)
         for (r, c, v) in zip(rows, cols, vals):
@@ -256,7 +256,7 @@ class QUBOContainer:
                 # skip diagonal
                 continue
             else:
-                contents.append('\n{:d} {:d} {: .2f}'.format(r, c, v))
+                contents.append(f"\n{r:d} {c:d} {v: .2f}")
                 nElements += 1
         # Add in program sentinel
         # sentinelLine =  '\nc Program line sentinel follows; format:'
