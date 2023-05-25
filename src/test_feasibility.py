@@ -9,7 +9,7 @@ import argparse
 import numpy as np
 import scipy.sparse as sp
 from vrpqubo.tools.qubo_tools import s_to_x
-from vrpqubo.tools.test_tools import load_spins
+from vrpqubo.tools.load_tools import load_spins
 
 def main():
     """Test feasibility of spins"""
