@@ -63,13 +63,13 @@ def QUBO_to_Ising(
     Uses `scipy.sparse` arrays.
     Does not modify inputs.
     """
-    Q = sp.lil_matrix(Q)
+    Q = sp.lil_array(Q)
     (n, m) = Q.shape
     if n != m:
         raise ValueError("Expected a square matrix.")
     # Convert QUBO to Ising
     J = 0.25*Q
-    h = -0.25*(Q.sum(0).A1 + Q.sum(1).A1)
+    h = -0.25*(Q.sum(0).ravel() + Q.sum(1).ravel())
     c = 0.25*(Q.sum() + Q.diagonal().sum()) + const
     # Make the diagonal of J zero
     # This may throw a warning statement about efficiency depending on sparse type of J
@@ -90,7 +90,7 @@ def Ising_to_QUBO(
     Uses `scipy.sparse` arrays.
     Does not modify inputs.
     """
-    J = sp.csr_matrix(J)
+    J = sp.csr_array(J)
     h = np.asarray(h).flatten()
     (n, m) = J.shape
     if n != m:
@@ -98,9 +98,7 @@ def Ising_to_QUBO(
     if n != h.shape[0]:
         raise ValueError("Expected a matrix and vector of compatible size.")
     # Convert Ising to QUBO
-    # Note: scipy.sparse.matrix.sum() returns a numpy matrix,
-    #       and attribute .A1 is the flattened ndarray
-    Q = 4*J - 2*sp.diags(J.sum(0).A1 + J.sum(1).A1 + h)
+    Q = 4*J - 2*sp.diags(J.sum(0).ravel() + J.sum(1).ravel() + h)
     c = J.sum() + h.sum() + const
     return Q.tocsr(), c
 
@@ -116,7 +114,7 @@ def to_upper_triangular(M: ArrayLike) -> sp.csr_array:
     # Get strictly lower triangular part, add transpose to upper triangle,
     # then zero out lower triangle
     LT = sp.tril(M, k=-1)
-    UT = sp.lil_matrix(M) + LT.transpose() - LT
+    UT = sp.lil_array(M) + LT.transpose() - LT
     UT = UT.tocsr()
     UT.eliminate_zeros()
     return UT
@@ -130,7 +128,7 @@ def to_symmetric(M: ArrayLike) -> sp.csr_array:
     (n, m) = M.shape
     if n != m:
         raise ValueError("Expected a square matrix.")
-    S = sp.lil_matrix(M, dtype=float)
+    S = sp.lil_array(M, dtype=float)
     S += S.transpose()
     S *= 0.5
     return S.tocsr()
@@ -152,7 +150,7 @@ class QUBOContainer:
         elif pattern.lower() == "symmetric":
             self.Q = to_symmetric(Q)
         else:
-            self.Q = sp.csr_matrix(Q)
+            self.Q = sp.csr_array(Q)
         # Ising matrix has same pattern as QUBO matrix
         # (with explicitly zeroed-out diagonal)
         self.J, self.h, self.const_ising = QUBO_to_Ising(self.Q, self.const_qubo)
