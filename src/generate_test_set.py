@@ -49,12 +49,6 @@ def main():
 def gen(prefix, horizons):
     """ Generate test set """
 
-    # for (TH, ex) in product(horizons, formulations):
-        # mod = ex.__name__.split('.')[0]
-        # name = ''.join([w[0] for w in mod.split('_')])
-
-        # # define problem and export it
-        # prob = ex.DefineProblem(TH, make_feasible=True)
     formulations = ["arc_based", "path_based", "sequence_based"]
     for t_h in horizons:
         # Define base problem
@@ -102,7 +96,11 @@ def gen(prefix, horizons):
                 r_p.export_mip(bname + "o.lp")
                 cplex_prob = r_p.get_cplex_prob()
                 cplex_prob.parameters.mip.limits.solutions.set(1)
-                cplex_prob.solve()
+                try:
+                    cplex_prob.solve()
+                except cplex.exceptions.CplexError as err:
+                    print(f"CPLEX Error: {err}")
+                    continue
                 stat = cplex_prob.solution.get_status_string()
                 if stat.lower() not in CPLEX_FEASIBLE:
                     print(f"No solution written; status: {stat}")

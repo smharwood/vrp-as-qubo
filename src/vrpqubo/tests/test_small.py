@@ -52,7 +52,7 @@ class TestSmall(unittest.TestCase):
         self.assertEqual(0, r_eq, "Quadratic constraint data is wrong")
 
         # Test QUBO form
-        Q, c = ab.get_qubo_new(feasibility=False)
+        Q, c = ab.get_qubo(feasibility=False)
         qubo = QUBOContainer(Q, c)
         # x should have cost 5
         self.assertEqual(5, qubo.evaluate_QUBO(x), "QUBO objective is incorrect")
@@ -99,7 +99,7 @@ class TestSmall(unittest.TestCase):
         self.assertEqual(0, r_eq, "Quadratic constraint data is wrong")
 
         # Test QUBO form
-        Q, c = pb.get_qubo_new(feasibility=False)
+        Q, c = pb.get_qubo(feasibility=False)
         qubo = QUBOContainer(Q, c)
         # x should have cost 5
         self.assertEqual(5, qubo.evaluate_QUBO(x), "QUBO objective is incorrect")
@@ -171,7 +171,7 @@ class TestSmall(unittest.TestCase):
         )
 
         # Test QUBO form
-        Q, c = sb.get_qubo_new(feasibility=False)
+        Q, c = sb.get_qubo(feasibility=False)
         qubo = QUBOContainer(Q, c)
         # x should have cost 7
         self.assertEqual(7, qubo.evaluate_QUBO(x), "QUBO objective is incorrect")

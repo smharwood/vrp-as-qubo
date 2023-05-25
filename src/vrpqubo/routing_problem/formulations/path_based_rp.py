@@ -376,7 +376,7 @@ class PathBasedRoutingProblem(RoutingProblem):
             mp_constraints_matrix[node_indices, col_indices] = 1
         mask = np.ones(num_nodes, dtype=bool)
         mask[self.depot_index] = False
-        mp_constraints_matrix = sparse.csr_matrix(mp_constraints_matrix[mask, :])
+        mp_constraints_matrix = sparse.csr_array(mp_constraints_matrix[mask, :])
         return mp_cost, mp_constraints_matrix, mp_constraints_rhs
 
     def get_objective_data(self):
@@ -391,7 +391,7 @@ class PathBasedRoutingProblem(RoutingProblem):
             Q (array): 2-d array defining quadratic part of objective
         """
         n = self.get_num_variables()
-        return np.array(self.route_costs), sparse.csr_matrix((n,n))
+        return np.asarray(self.route_costs), sparse.csr_array((n,n))
 
     def get_constraint_data(self):
         """
@@ -410,7 +410,7 @@ class PathBasedRoutingProblem(RoutingProblem):
         """
         _, A_eq, b_eq = self.get_math_program_data()
         n = self.get_num_variables()
-        return A_eq, b_eq, sparse.csr_matrix((n,n)), 0
+        return A_eq, b_eq, sparse.csr_array((n,n)), 0
 
     def get_sufficient_penalty(self, feasibility):
         """
@@ -430,78 +430,6 @@ class PathBasedRoutingProblem(RoutingProblem):
         else:
             sufficient_pp = np.sum(np.fabs(cost) for cost in self.route_costs)
         return sufficient_pp
-
-    def get_qubo(self, feasibility=False, penalty_parameter=None):
-        """
-        Get the Quadratic Unconstrained Binary Optimization problem reformulation
-
-        args:
-        feasibility (bool): Get the feasibility problem (ignore the objective)
-        penalty_parameter (float): value of penalty parameter to use for reformulation.
-            If None, it is determined automatically
-
-        Return:
-        Q (ndarray): Square matrix defining QUBO
-        c (float): a constant that makes the objective of the QUBO equal to the
-            objective value of the original constrained integer program
-        """
-
-        if feasibility:
-            # ignore costs, just capture penalized constraints
-            penalty_parameter = 1
-        else:
-            # do exact penalty; look at L1 norm of cost vector
-            sufficient_pp = np.sum(np.abs(self.route_costs))
-            if penalty_parameter is None:
-                penalty_parameter = sufficient_pp + 1.0
-            if penalty_parameter <= sufficient_pp:
-                logger.warning(
-                    "Penalty parameter might not be big enough...(>%s)", sufficient_pp
-                )
-
-        # num_nodes = len(self.nodes)
-        num_vars = len(self.route_costs)
-
-        _, mp_constraints_matrix, mp_constraints_rhs = self.get_math_program_data()
-
-        # according to scipy.sparse documentation,
-        # (https://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.coo_matrix.html#scipy.sparse.coo_matrix)
-        # Duplicated entries are merely summed to together when converting to an array or other sparse matrix type
-        # This is consistent with our aim
-        qval = []
-        qrow = []
-        qcol = []
-
-        if not feasibility:
-            # Linear objective terms:
-            for i, cost in enumerate(self.route_costs):
-                if cost != 0:
-                    qrow.append(i)
-                    qcol.append(i)
-                    qval.append(cost)
-
-        # Linear Equality constraints as penalty:
-        # rho*||Ax - b||^2 = rho*( x^T (A^T A) x - 2b^T A x + b^T b )
-
-        # Put -2b^T A on the diagonal:
-        TwoBTA = -2 * mp_constraints_matrix.transpose().dot(mp_constraints_rhs)
-        for i in range(num_vars):
-            if TwoBTA[i] != 0:
-                qrow.append(i)
-                qcol.append(i)
-                qval.append(penalty_parameter * TwoBTA[i])
-
-        # Construct the QUBO objective matrix so far
-        # Convert to ndarray, because if we add a dense matrix to it,
-        # the result is a np.matrix, which is potentially deprecated
-        Q = sparse.coo_matrix((qval, (qrow, qcol))).toarray()
-
-        # Add A^T A to it
-        # This will be a ndarray
-        Q = Q + penalty_parameter * mp_constraints_matrix.transpose().dot(mp_constraints_matrix)
-        # constant term of QUBO objective
-        constant = penalty_parameter * mp_constraints_rhs.dot(mp_constraints_rhs)
-        return Q, constant
 
     def get_cplex_prob(self):
         """ Get a CPLEX object containing the BLEC/MIP representation
@@ -525,7 +453,7 @@ class PathBasedRoutingProblem(RoutingProblem):
         # rows = rows.tolist()
         # cols = cols.tolist()
         # vals = vals.tolist()
-        constraints_mat = sparse.coo_matrix(mp_constraints_matrix)
+        constraints_mat = sparse.coo_array(mp_constraints_matrix)
         rows = constraints_mat.row.tolist()
         cols = constraints_mat.col.tolist()
         vals = constraints_mat.data.tolist()

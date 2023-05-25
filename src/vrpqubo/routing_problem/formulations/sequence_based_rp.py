@@ -268,7 +268,7 @@ class SequenceBasedRoutingProblem(RoutingProblem):
                         qval.append(coeff)
         # construct sparse matrix for bilinear terms
         M = self.get_num_variables()
-        self.objective_q = sparse.coo_matrix((qval,(qrow,qcol)), shape=(M,M))
+        self.objective_q = sparse.coo_array((qval,(qrow,qcol)), shape=(M,M))
         self.objective_built = True
         return
 
@@ -316,7 +316,7 @@ class SequenceBasedRoutingProblem(RoutingProblem):
         # construct sparse matrix for bilinear terms
         n_var = self.get_num_variables()
         pqval = np.ones(len(pqrow))
-        self.quadratic_constraints_matrix = sparse.coo_matrix((pqval,(pqrow,pqcol)),
+        self.quadratic_constraints_matrix = sparse.coo_array((pqval,(pqrow,pqcol)),
             shape=(n_var,n_var)
         )
         self.quad_con_built = True
@@ -424,7 +424,7 @@ class SequenceBasedRoutingProblem(RoutingProblem):
                 # end for
                 row_index += 1
 
-        self.linear_constraints_matrix = sparse.coo_matrix((aval,(arow,acol)))
+        self.linear_constraints_matrix = sparse.coo_array((aval,(arow,acol)))
         self.linear_constraints_rhs = np.array(brhs)
         self.lin_con_built = True
         duration = time.time() - start
@@ -550,7 +550,7 @@ class SequenceBasedRoutingProblem(RoutingProblem):
         A_eq = self.linear_constraints_matrix
         b_eq = self.linear_constraints_rhs
         # Linearizing bilinear constraints is just too big
-        Q_eq = sparse.csr_matrix(self.quadratic_constraints_matrix)
+        Q_eq = sparse.csr_array(self.quadratic_constraints_matrix)
         r_eq = 0
         # if anything is empty, make sure its dense
         if len(b_eq) == 0:
@@ -576,88 +576,6 @@ class SequenceBasedRoutingProblem(RoutingProblem):
             sum_arc_cost = sum(np.fabs(arc.get_cost()) for arc in self.arcs.values())
             sufficient_pp = self.max_sequence_length*self.max_vehicles*sum_arc_cost
         return sufficient_pp
-
-    def get_qubo(self, feasibility=False, penalty_parameter=None):
-        """
-        Get the Quadratic Unconstrained Binary Optimization problem reformulation
-
-        args:
-        feasibility (bool): Get the feasibility problem (ignore the objective)
-        penalty_parameter (float): value of penalty parameter to use for reformulation.
-            If None, it is determined automatically
-
-        Return:
-        Q (ndarray): Square matrix defining QUBO
-        c (float): a constant that makes the objective of the QUBO equal to the
-            objective value of the original constrained integer program
-        """
-        self.build_objective()
-        self.build_linear_constraints()
-        self.build_quadratic_constraints()
-
-        sufficient_pp = self.get_sufficient_penalty(feasibility)
-        if penalty_parameter is None:
-            penalty_parameter = sufficient_pp + 1.0
-        if penalty_parameter <= sufficient_pp:
-            logger.warning(
-                "Penalty parameter might not be big enough...(>%s)", sufficient_pp
-            )
-
-        qval = []
-        qrow = []
-        qcol = []
-
-        # according to scipy.sparse documentation,
-        # (https://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.coo_matrix.html#scipy.sparse.coo_matrix)
-        # Duplicated entries are merely summed to together when converting to an
-        # array or other sparse matrix type. This is consistent with our aim
-
-        if not feasibility:
-            # Linear objective terms:
-            for i in range(self.get_num_variables()):
-                if self.objective_c[i] != 0:
-                    qrow.append(i)
-                    qcol.append(i)
-                    qval.append(self.objective_c[i])
-            # Quadratic objective terms:
-            for (r,c,val) in zip(self.objective_q.row,
-                                 self.objective_q.col,
-                                 self.objective_q.data):
-                qrow.append(r)
-                qcol.append(c)
-                qval.append(val)
-
-        # Quadratic edge penalty terms:
-        for (r,c,val) in zip(self.quadratic_constraints_matrix.row,
-                             self.quadratic_constraints_matrix.col,
-                             self.quadratic_constraints_matrix.data):
-            qrow.append(r)
-            qcol.append(c)
-            qval.append(penalty_parameter*val)
-
-        # Linear Equality constraints:
-        # rho*||Ax - b||^2 = rho*( x^T (A^T A) x - 2b^T A x + b^T b )
-
-        # Put -2b^T A on the diagonal:
-        TwoBTA = -2*self.linear_constraints_matrix.transpose().dot(self.linear_constraints_rhs)
-        for i in range(self.get_num_variables()):
-            if TwoBTA[i] != 0:
-                qrow.append(i)
-                qcol.append(i)
-                qval.append(penalty_parameter*TwoBTA[i])
-
-        # Construct the QUBO objective matrix so far
-        Q = sparse.coo_matrix((qval,(qrow,qcol)))
-
-        # Add A^T A to it
-        # This will be some sparse matrix (probably CSR format)
-        Q = Q + penalty_parameter*self.linear_constraints_matrix.transpose().dot(
-            self.linear_constraints_matrix
-        )
-
-        # constant term of QUBO objective
-        constant = penalty_parameter*self.linear_constraints_rhs.dot(self.linear_constraints_rhs)
-        return Q, constant
 
     def get_cplex_prob(self):
         """
@@ -796,15 +714,3 @@ class SequenceBasedRoutingProblem(RoutingProblem):
     #         (vj,sj,nj) = self.get_var_tuple_index(c)
     #         print("(v{}, s{}, {}) -- (v{}, s{}, {}) : (not allowed)".format(
     #                 vi,si,self.node_names[ni], vj,sj,self.node_names[nj]))
-
-    # def print_qubo(self, Q=None):
-    #     """ Print QUBO matrix Q all pretty with var names """
-    #     if Q is None:
-    #         Q, _ = self.get_qubo()
-
-    #     Qcoo = Q.tocoo()
-    #     for (r,c,val) in zip(Qcoo.row,Qcoo.col,Qcoo.data):
-    #         (vi,si,ni) = self.get_var_tuple_index(r)
-    #         (vj,sj,nj) = self.get_var_tuple_index(c)
-    #         print("(v{}, s{}, {}) -- (v{}, s{}, {}) : {}".format(
-    #                 vi,si,self.node_names[ni], vj,sj,self.node_names[nj], val))

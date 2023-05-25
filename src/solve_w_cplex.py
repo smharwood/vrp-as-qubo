@@ -73,7 +73,12 @@ def solve_all_isings(testset_path, first_feasible=False, verbose=True):
                     print("Stopping at first feasible solution")
                 cplex_prob.parameters.mip.limits.solutions.set(1)
             start = cplex_prob.get_time()
-            cplex_prob.solve()
+            try:
+                cplex_prob.solve()
+            except cplex.exceptions.CplexSolverError as err:
+                if verbose:
+                    print(f"CPLEX Error: {err}")
+                continue
             soltime = cplex_prob.get_time() - start
             raw_objective = cplex_prob.solution.get_objective_value()
             objective = raw_objective + c
@@ -112,7 +117,12 @@ def solve_all_lps(testset_path, first_feasible=False, verbose=True):
                     print("Stopping at first feasible solution")
                 cplex_prob.parameters.mip.limits.solutions.set(1)
             start = cplex_prob.get_time()
-            cplex_prob.solve()
+            try:
+                cplex_prob.solve()
+            except cplex.exceptions.CplexSolverError as err:
+                if verbose:
+                    print(f"CPLEX Error: {err}")
+                continue
             soltime = cplex_prob.get_time() - start
             stat = cplex_prob.solution.get_status_string()
             if stat.lower() in CPLEX_FEASIBLE:
@@ -137,7 +147,7 @@ def build_cplex_from_qubo(Q):
     n = Q.shape[0]
 
     # copy out diagonal, then set to zero
-    Qcop = sp.coo_matrix(Q)
+    Qcop = sp.coo_array(Q)
     c = Q.diagonal().tolist()
     Qcop.setdiag(0)
 

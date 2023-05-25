@@ -157,7 +157,7 @@ class RoutingProblem:
         """
         raise NotImplementedError
 
-    def get_qubo_new(self, feasibility=False, penalty_parameter=None):
+    def get_qubo(self, feasibility=False, penalty_parameter=None):
         """
         Get the Quadratic Unconstrained Binary Optimization (QUBO) problem reformulation.
         This assumes that the routing problem may be formulated as

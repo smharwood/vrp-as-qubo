@@ -275,7 +275,7 @@ class ArcBasedRoutingProblem(RoutingProblem):
         # First, index the non-trivial constraints
         flow_conservation_mapping = []
         for i in range(1,len(self.nodes)):
-            for s in self.time_points:
+            for s_index, s in enumerate(self.time_points):
                 # Constraint:
                 # sum_jt x_jtis - sum_jt x_isjt = 0
 
@@ -290,7 +290,7 @@ class ArcBasedRoutingProblem(RoutingProblem):
                     break
                 flow_conservation_mapping.append((i,s))
                 brhs.append(0)
-                self.constraint_names.append(f"cflow_{i},{s}")
+                self.constraint_names.append(f"cflow_{i},{s_index}")
                 row_index += 1
         # NOW, go through variables
         # Note: each variable is an arc, and participates in (at most) TWO constraints:
@@ -551,77 +551,6 @@ class ArcBasedRoutingProblem(RoutingProblem):
             sufficient_pp = sum_arc_cost*len(self.time_points)**2
         return sufficient_pp
 
-    def get_qubo(self, feasibility=False, penalty_parameter=None):
-        """
-        Get the Quadratic Unconstrained Binary Optimization problem reformulation
-
-        args:
-        feasibility (bool): Get the feasibility problem (ignore the objective)
-        penalty_parameter (float): value of penalty parameter to use for reformulation.
-            If None, it is determined automatically
-
-        Return:
-        Q (ndarray): Square matrix defining QUBO
-        c (float): a constant that makes the objective of the QUBO equal to the
-            objective value of the original constrained integer program
-        """
-        self.build_objective()
-        self.build_constraints()
-
-        if feasibility:
-            penalty_parameter = 1.0
-        else:
-            sum_arc_cost = sum([np.fabs(arc.get_cost()) for arc in self.arcs.values()])
-            sufficient_pp = (len(self.time_points)**2)*sum_arc_cost
-            if penalty_parameter is None:
-                penalty_parameter = sufficient_pp + 1.0
-            if penalty_parameter <= sufficient_pp:
-                logger.warning(
-                    "Penalty parameter might not be big enough...(>%s)", sufficient_pp
-                )
-
-        qval = []
-        qrow = []
-        qcol = []
-
-        # according to scipy.sparse documentation,
-        # (https://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.coo_matrix.html#scipy.sparse.coo_matrix)
-        # Duplicated entries are merely summed to together when converting to an
-        # array or other sparse matrix type. This is consistent with our aim
-
-        # Linear objective terms:
-        if not feasibility:
-            for i in range(self.get_num_variables()):
-                if self.objective[i] != 0:
-                    qrow.append(i)
-                    qcol.append(i)
-                    qval.append(self.objective[i])
-
-        # Linear Equality constraints:
-        # rho * ||Ax - b||^2 = rho*( x^T (A^T A) x - 2b^T A x + b^T b )
-
-        # Put -2b^T A on the diagonal:
-        two_bta = -2*self.constraints_matrix.transpose().dot(self.constraints_rhs)
-        for i in range(self.get_num_variables()):
-            if two_bta[i] != 0:
-                qrow.append(i)
-                qcol.append(i)
-                qval.append(penalty_parameter*two_bta[i])
-
-        # Construct the QUBO objective matrix so far
-        Q = sparse.coo_matrix((qval,(qrow,qcol)),
-            shape=(self.get_num_variables(),self.get_num_variables())
-        )
-
-        # Add A^T A to it
-        # This will be some sparse matrix (probably CSR format)
-        Q = Q + penalty_parameter*self.constraints_matrix.transpose().dot(self.constraints_matrix)
-
-        # constant term of QUBO objective
-        constant = penalty_parameter*self.constraints_rhs.dot(self.constraints_rhs)
-
-        return Q, constant
-
     def get_cplex_prob(self):
         """
         Get a CPLEX object containing the original constrained integer program
@@ -643,7 +572,8 @@ class ArcBasedRoutingProblem(RoutingProblem):
         var_types = [cplex_prob.variables.type.binary] * len(self.objective)
         t_index = dict( (t,i) for i,t in enumerate(self.time_points))
         def namer(isjt):
-            return f"n{isjt[0]}t{isjt[1]}_n{isjt[2]}t{isjt[3]}"
+            i, s, j, t = isjt
+            return f"n{i}t{t_index[s]}_n{j}t{t_index[t]}"
         names = list(map(namer, self.var_mapping))
         con_types = ['E'] * len(self.constraints_rhs)
         rows = self.constraints_matrix.row.tolist()

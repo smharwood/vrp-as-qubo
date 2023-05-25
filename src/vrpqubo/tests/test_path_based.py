@@ -59,7 +59,7 @@ class TestPathBased(unittest.TestCase):
 
         # QUBO matrix: cᵀx + xᵀQx + ρ(||Ax - b||² + xᵀRx)
         pp = 10.0
-        Q, c = pb.get_qubo_new(feasibility=False, penalty_parameter=pp)
+        Q, c = pb.get_qubo(feasibility=False, penalty_parameter=pp)
         self.assertEqual(c, pp*b_eq.dot(b_eq), "Constant of QUBO is wrong")
         Q_manual = pp*(A_eq.transpose().dot(A_eq)).toarray()
         Q_manual += np.diag(-2*pp*A_eq.transpose().dot(b_eq) + c_obj)
