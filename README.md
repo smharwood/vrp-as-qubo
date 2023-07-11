@@ -9,7 +9,7 @@ pip install .
 ```
 or without cloning:
 ```
-pip install vrpqubo @ git+https://github.com/smharwood/mirpasqubo
+pip install git+https://github.com/smharwood/mirpasqubo
 ```
 However, the package is pretty simple and after cloning everything should work if your working directory is `src/vrpqubo`.
 
