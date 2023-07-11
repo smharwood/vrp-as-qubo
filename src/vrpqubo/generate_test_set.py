@@ -13,7 +13,7 @@ from .tools.qubo_tools import QUBOContainer, x_to_s
 from .examples.mirp_g1 import get_mirp
 try:
     import cplex
-    from solve_w_cplex import CPLEX_FEASIBLE
+    from .solve_w_cplex import CPLEX_FEASIBLE
     HAVE_CPLEX = True
 except ImportError:
     HAVE_CPLEX = False
