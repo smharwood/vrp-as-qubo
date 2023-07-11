@@ -2,7 +2,9 @@
 .vscode/
 __pycache__/
 *.pyc
+*.egg-info
 
+TestSet*/
 
 *.aux
 *.bbl

@@ -428,7 +428,7 @@ class PathBasedRoutingProblem(RoutingProblem):
         if feasibility:
             sufficient_pp = 0.0
         else:
-            sufficient_pp = np.sum(np.fabs(cost) for cost in self.route_costs)
+            sufficient_pp = sum(np.fabs(cost) for cost in self.route_costs)
         return sufficient_pp
 
     def get_cplex_prob(self):

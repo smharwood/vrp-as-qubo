@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vrpqubo"
+version = "0.1"
+requires-python = ">=3.9"
+dependencies = [
+    "scipy >= 1.10.1",
+]
+
+[project.optional-dependencies]
+CPLEX = ["cplex"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["vrpqubo"]
+exclude = ["vrpqubo.tests*"]
+
+[project.scripts]
+generate_test_set = "generate_test_set:main"
+test_feasibility = "test_feasibility:main"
+solve_w_cplex = "solve_w_cplex:main"
