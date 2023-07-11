@@ -15,10 +15,9 @@ CPLEX = ["cplex"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["vrpqubo"]
 exclude = ["vrpqubo.tests*"]
 
 [project.scripts]
-generate_test_set = "generate_test_set:main"
-test_feasibility = "test_feasibility:main"
-solve_w_cplex = "solve_w_cplex:main"
+generate_test_set = "vrpqubo.generate_test_set:main"
+test_feasibility = "vrpqubo.test_feasibility:main"
+solve_w_cplex = "vrpqubo.solve_w_cplex:main"
