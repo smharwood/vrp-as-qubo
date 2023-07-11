@@ -78,7 +78,7 @@ class TestSequenceBased(unittest.TestCase):
         )
 
         # QUBO matrix: cᵀx + xᵀQx + ρ(||Ax - b||² + xᵀRx)
-        pp = 10.0
+        pp = 100.0
         Q, c = sb.get_qubo(feasibility=False, penalty_parameter=pp)
         self.assertEqual(c, pp*b_eq.dot(b_eq), "Constant of QUBO is wrong")
         Q_manual = (Q_obj + pp*(A_eq.transpose().dot(A_eq) + Q_eq)).toarray()

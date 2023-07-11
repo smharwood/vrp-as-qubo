@@ -15,8 +15,9 @@ from ..applications import MIRP
 
 def sample(vari, size: int=1):
     """
-    Sample anything.
-    If not sampleable, return appropriate size array of constant values
+    "Sample" anything.
+    If sampleable, return an array of samples.
+    If not sampleable, return object itself (but check compatibility with `size`)
     """
     if isinstance(vari, Sampleable_Type):
         return vari.rvs(size)

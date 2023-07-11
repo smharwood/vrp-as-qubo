@@ -11,7 +11,7 @@ or without cloning:
 ```
 pip install vrpqubo @ git+https://github.com/smharwood/mirpasqubo
 ```
-However, the package is pretty simple and after cloning everything should work if your working directory is `src/`.
+However, the package is pretty simple and after cloning everything should work if your working directory is `src/vrpqubo`.
 
 ## Dependencies
 This package has minimal dependencies (`scipy`).

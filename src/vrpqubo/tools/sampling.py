@@ -85,8 +85,8 @@ class ConstantSampler(SimpleSampler):
         self.constant = constant
 
     def rvs(self, size: int=1):
-        if size == 1:
-            return self.constant
+        # To be consistent with scipy.stats behavior,
+        # an array is always returned if the size is provided
         return self.constant*np.ones(size)
 
 class NegatedSampler(SimpleSampler):

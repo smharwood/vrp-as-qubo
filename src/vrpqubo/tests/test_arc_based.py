@@ -64,7 +64,7 @@ class TestArcBased(unittest.TestCase):
         self.assertEqual(0, r_eq, "Quadratic constraint data is wrong")
 
         # QUBO matrix: cᵀx + xᵀQx + ρ(||Ax - b||² + xᵀRx)
-        pp = 10.0
+        pp = 100.0
         Q, c = ab.get_qubo(feasibility=False, penalty_parameter=pp)
         self.assertEqual(c, pp*b_eq.dot(b_eq), "Constant of QUBO is wrong")
         Q_manual = pp*(A_eq.transpose().dot(A_eq)).toarray()
