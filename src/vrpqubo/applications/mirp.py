@@ -227,8 +227,8 @@ class MIRP:
         """
         most_freq = min(self.port_frequency.values())
         most_trips = self.time_horizon/most_freq
-        costs = [arc.get_cost() for arc in self.vrptw.arcs.values()]
-        return 2*max(costs)*most_trips
+        max_cost = max(arc.get_cost() for arc in self.vrptw.arcs.values())
+        return 2*max_cost*most_trips
 
     def get_arc_based(self, make_feasible: bool=True) -> ArcBasedRoutingProblem:
         """
