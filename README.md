@@ -1,4 +1,4 @@
-# MIRP as QUBO:
+# VRP as QUBO:
 
 Casting Vehicle Routing Problems (VRP), and specifically Maritime Inventory Routing Problems (MIRP), as Quadratic Unconstrained Binary Optimization problems (QUBO)
 
@@ -9,7 +9,7 @@ pip install .
 ```
 or without cloning:
 ```
-pip install git+https://github.com/smharwood/mirpasqubo
+pip install git+https://github.com/smharwood/vrp-as-qubo
 ```
 However, the package is pretty simple and after cloning everything should work if your working directory is `src/vrpqubo`.
 
