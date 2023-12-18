@@ -35,3 +35,6 @@ Detailed (but incomplete) mathematics of formulations and ideas in code
 
 ### src
 Source code for package and tests
+
+## References
+Please see [Harwood S, Gambella C, Trenev D, Simonetto A, Bernal D, Greenberg D. Formulating and solving routing problems on quantum computers. IEEE Transactions on Quantum Engineering. 2021 Jan 6;2:1-7.](https://ieeexplore.ieee.org/abstract/document/9314905/)
